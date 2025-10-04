@@ -9,8 +9,6 @@ from PyQt6.QtCore import QTimer
 import asyncio
 from desktop_notifier import DesktopNotifier, Button, ReplyField
 
-from ..config.constants import APP_MODE, APP_MODE_FULL
-
 # Single notifier instance for the whole module
 notifier = DesktopNotifier(app_name="Intention")
 
@@ -114,8 +112,8 @@ class NotificationManager:
 
             # Good/Bad buttons only for notification alerts with callbacks
             buttons = []
-            # Only create feedback buttons in Treatment mode
-            if title == "알림" and (on_good or on_bad) and APP_MODE == APP_MODE_FULL:
+            # Create feedback buttons when callbacks are provided
+            if title == "알림" and (on_good or on_bad):
                 # Generate unique ID for debugging
                 button_id = str(uuid.uuid4())[:8]
                 print("🔔" * 20)
@@ -124,7 +122,6 @@ class NotificationManager:
                 print(f"   Button ID: {button_id}")
                 print(f"   Has Good callback: {on_good is not None}")
                 print(f"   Has Bad callback: {on_bad is not None}")
-                print(f"   APP_MODE: {APP_MODE}")
                 print("🔔" * 20)
 
                 def _good():
@@ -237,15 +234,7 @@ class NotificationManager:
                 ]
             else:
                 buttons = []
-                if (
-                    title == "알림"
-                    and (on_good or on_bad)
-                    and APP_MODE != APP_MODE_FULL
-                ):
-                    print(
-                        f"[NOTIFICATION] Feedback buttons disabled - APP_MODE: {APP_MODE} (not Treatment mode)"
-                    )
-                elif title == "알림":
+                if title == "알림":
                     print(
                         f"[NOTIFICATION] No feedback callbacks provided - notification only"
                     )

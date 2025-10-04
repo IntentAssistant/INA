@@ -48,12 +48,9 @@ from datetime import datetime
 from AppKit import NSWindow, NSWindowSharingNone
 from ctypes import c_void_p
 from ..config.constants import (
-    APP_MODE,
-    APP_MODE_FULL,
-    APP_MODE_BASIC,
-    APP_MODE_REMINDER,
-    LLM_CHAT_API_ENDPOINT,
-    CLOUD_STORAGE_ENDPOINT,
+    WINDOW_MIN_WIDTH,
+    WINDOW_MIN_HEIGHT,
+    NOTIFICATION_ENABLED,
 )
 from ..config.language import get_text
 
@@ -278,8 +275,6 @@ class SetIntentionReminderPopup(QDialog):
 
     def init_ui(self):
         """Initialize the popup UI"""
-        from ..config.constants import APP_MODE, APP_MODE_BASIC
-
         # Window settings
         self.setWindowTitle(get_text("set_intention_title"))
         self.setFixedSize(520, 320)
@@ -310,13 +305,9 @@ class SetIntentionReminderPopup(QDialog):
         icon_label.setStyleSheet("font-size: 32px;")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Different messages for BASIC vs other modes
-        if APP_MODE == APP_MODE_BASIC:
-            title_text = get_text("set_intention_title")
-            message_text = get_text("set_intention_message_basic")
-        else:
-            title_text = get_text("set_intention_title")
-            message_text = get_text("set_intention_message_general")
+        # Welcome message
+        title_text = get_text("set_intention_title")
+        message_text = get_text("set_intention_message_general")
 
         title_label = QLabel(title_text)
         title_label.setStyleSheet(
@@ -476,10 +467,8 @@ class Dashboard(QWidget):
             parent=self,
         )
 
-        # Initialize SessionRatingManager
-        from .session_rating_manager import SessionRatingManager
-
-        self.session_rating_manager = SessionRatingManager(user_config, dashboard=self)
+        # Session rating removed - only local storage used
+        self.session_rating_manager = None
 
         # Connect feedback signals
         self.feedback_manager.feedback_processed.connect(self._on_feedback_processed)
@@ -538,23 +527,20 @@ class Dashboard(QWidget):
         # Create all popup windows
         self.window_manager.create_all_windows()
 
-        # Load and display today's history (skip for BASIC mode)
-        if APP_MODE != APP_MODE_BASIC:
-            # Ensure history is properly loaded before displaying
-            history_loaded = self.history_manager.load_intention_history()
-            if history_loaded:
-                self.load_and_display_today_history()
-                print("[DASHBOARD] History loaded and displayed successfully")
-            else:
-                print("[DASHBOARD] History loading failed, starting with empty state")
-                # Still try to display empty state
-                self.load_and_display_today_history()
+        # Load and display today's history
+        history_loaded = self.history_manager.load_intention_history()
+        if history_loaded:
+            self.load_and_display_today_history()
+            print("[DASHBOARD] History loaded and displayed successfully")
+        else:
+            print("[DASHBOARD] History loading failed, starting with empty state")
+            # Still try to display empty state
+            self.load_and_display_today_history()
 
-        # Show history window on startup (skip for BASIC mode)
-        if APP_MODE != APP_MODE_BASIC:
-            QTimer.singleShot(
-                500, self.show_history_window
-            )  # Small delay to ensure UI is ready
+        # Show history window on startup
+        QTimer.singleShot(
+            500, self.show_history_window
+        )  # Small delay to ensure UI is ready
 
         # Make windows secure from screen capture
         self.window_manager.make_windows_secure(EXCLUDE_FROM_SCREEN_CAPTURE)
@@ -603,14 +589,7 @@ class Dashboard(QWidget):
         return bool(re.search(r"[가-힣]", text))
 
     def init_ui(self):
-        if APP_MODE == APP_MODE_FULL:
-            APP_TITLE = get_text("app_title_1")
-        elif APP_MODE == APP_MODE_REMINDER:
-            APP_TITLE = get_text("app_title_2")
-        elif APP_MODE == APP_MODE_BASIC:
-            APP_TITLE = get_text("app_title_3")
-        else:
-            APP_TITLE = get_text("app_title_test")
+        APP_TITLE = get_text("app_title_1")
 
         # Basic window settings
         self.setWindowTitle(APP_TITLE)
@@ -620,15 +599,9 @@ class Dashboard(QWidget):
             | Qt.WindowType.NoDropShadowWindowHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        # Set different sizes based on app mode
-        if APP_MODE == APP_MODE_BASIC:
-            self.setFixedWidth(
-                400
-            )  # Wider to accommodate opacity slider + title + buttons
-            self.setFixedHeight(50)  # Increased height to prevent clipping
-        else:
-            self.setFixedWidth(DASHBOARD_WIDTH)  # Normal width for other modes
-            self.setFixedHeight(DASHBOARD_HEIGHT)  # Normal height for other modes
+        # Set window size
+        self.setFixedWidth(DASHBOARD_WIDTH)
+        self.setFixedHeight(DASHBOARD_HEIGHT)
 
         # Main layout setup (no margins)
         main_layout = QVBoxLayout(self)
@@ -642,302 +615,196 @@ class Dashboard(QWidget):
 
         # Container widget internal layout
         layout = QVBoxLayout(self._container_widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
-        # Set different margins and spacing based on app mode
-        if APP_MODE == APP_MODE_BASIC:
-            layout.setContentsMargins(
-                4, 2, 4, 4
-            )  # Smaller top margin since we have title bar
-            layout.setSpacing(2)  # Smaller spacing for BASIC mode
-        else:
-            layout.setContentsMargins(8, 8, 8, 8)  # Normal margins
-            layout.setSpacing(8)  # Normal spacing
+        # Create title bar
+        # Create a container for the title bar
+        title_bar = QWidget()
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(12, 6, 12, 6)
+        title_bar_layout.setSpacing(0)
 
-        # Create title bar for non-BASIC modes only
-        if APP_MODE != APP_MODE_BASIC:
-            # Create a container for the title bar
-            title_bar = QWidget()
-            title_bar_layout = QHBoxLayout(title_bar)
-            title_bar_layout.setContentsMargins(12, 6, 12, 6)
-            title_bar_layout.setSpacing(0)
+        # Add drag functionality to the entire title bar
+        title_bar.mousePressEvent = self.drag_bar_mouse_press
+        title_bar.mouseMoveEvent = self.drag_bar_mouse_move
+        title_bar.mouseReleaseEvent = self.drag_bar_mouse_release
 
-            # Add drag functionality to the entire title bar
-            title_bar.mousePressEvent = self.drag_bar_mouse_press
-            title_bar.mouseMoveEvent = self.drag_bar_mouse_move
-            title_bar.mouseReleaseEvent = self.drag_bar_mouse_release
+        # Opacity slider (left side)
+        opacity_container = QWidget()
+        opacity_layout = QHBoxLayout(opacity_container)
+        opacity_layout.setContentsMargins(0, 0, 0, 0)
+        opacity_layout.setSpacing(4)
 
-            # Opacity slider (left side)
-            opacity_container = QWidget()
-            opacity_layout = QHBoxLayout(opacity_container)
-            opacity_layout.setContentsMargins(0, 0, 0, 0)
-            opacity_layout.setSpacing(4)
+        # Opacity label
+        opacity_label = QLabel("🔍")
+        opacity_label.setFixedSize(16, 16)
+        opacity_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        opacity_label.setStyleSheet("font-size: 12px;")
 
-            # Opacity label
-            opacity_label = QLabel("🔍")
-            opacity_label.setFixedSize(16, 16)
-            opacity_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            opacity_label.setStyleSheet("font-size: 12px;")
+        # Opacity slider
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setObjectName("opacitySlider")
+        self.opacity_slider.setMinimum(20)
+        self.opacity_slider.setMaximum(100)
+        self.opacity_slider.setValue(100)
+        self.opacity_slider.setFixedWidth(80)
+        self.opacity_slider.setFixedHeight(16)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
 
-            # Opacity slider
-            self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
-            self.opacity_slider.setObjectName("opacitySlider")
-            self.opacity_slider.setMinimum(20)  # 20% (changed from 10)
-            self.opacity_slider.setMaximum(100)  # 100%
-            self.opacity_slider.setValue(100)  # Default 100%
-            self.opacity_slider.setFixedWidth(80)
-            self.opacity_slider.setFixedHeight(16)
-            self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
+        opacity_layout.addWidget(opacity_label)
+        opacity_layout.addWidget(self.opacity_slider)
 
-            opacity_layout.addWidget(opacity_label)
-            opacity_layout.addWidget(self.opacity_slider)
+        # Create a container to hold the centered title
+        title_center_container = QWidget()
+        title_center_layout = QHBoxLayout(title_center_container)
+        title_center_layout.setContentsMargins(0, 0, 0, 0)
+        title_center_layout.setSpacing(0)
 
-            # Create a container to hold the centered title
-            title_center_container = QWidget()
-            title_center_layout = QHBoxLayout(title_center_container)
-            title_center_layout.setContentsMargins(0, 0, 0, 0)
-            title_center_layout.setSpacing(0)
+        # Title label (drag bar)
+        self.drag_bar = QLabel(APP_TITLE)
+        self.drag_bar.setObjectName("dragBar")
+        self.drag_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            # Title label (drag bar)
-            self.drag_bar = QLabel(APP_TITLE)
-            self.drag_bar.setObjectName("dragBar")
-            self.drag_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Add drag functionality to drag bar only
+        self.drag_bar.mousePressEvent = self.drag_bar_mouse_press
+        self.drag_bar.mouseMoveEvent = self.drag_bar_mouse_move
+        self.drag_bar.mouseReleaseEvent = self.drag_bar_mouse_release
 
-            # Add drag functionality to drag bar only
-            self.drag_bar.mousePressEvent = self.drag_bar_mouse_press
-            self.drag_bar.mouseMoveEvent = self.drag_bar_mouse_move
-            self.drag_bar.mouseReleaseEvent = self.drag_bar_mouse_release
+        title_center_layout.addStretch()
+        title_center_layout.addWidget(self.drag_bar)
+        title_center_layout.addStretch()
 
-            title_center_layout.addStretch()
-            title_center_layout.addWidget(self.drag_bar)
-            title_center_layout.addStretch()
+        # Settings button (gear icon)
+        self.settings_button = QPushButton("⚙")
+        self.settings_button.setObjectName("settingsButton")
+        self.settings_button.setFixedSize(QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE)
+        self.settings_button.clicked.connect(self.show_settings_menu)
 
-            # Settings button (gear icon)
-            self.settings_button = QPushButton("⚙")
-            self.settings_button.setObjectName("settingsButton")
-            self.settings_button.setFixedSize(QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE)
-            self.settings_button.clicked.connect(self.show_settings_menu)
+        # Quit button (right aligned)
+        self.quit_button = QPushButton("✕")
+        self.quit_button.setObjectName("quitButton")
+        self.quit_button.setFixedSize(QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE)
+        self.quit_button.clicked.connect(lambda: self.force_quit())
 
-            # Quit button (right aligned)
-            self.quit_button = QPushButton("✕")
-            self.quit_button.setObjectName("quitButton")
-            self.quit_button.setFixedSize(QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE)
-            self.quit_button.clicked.connect(lambda: self.force_quit())
+        # Create container for right side buttons
+        buttons_container = QWidget()
+        buttons_layout = QHBoxLayout(buttons_container)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(4)
+        buttons_layout.addWidget(self.settings_button)
+        buttons_layout.addWidget(self.quit_button)
 
-            # Create container for right side buttons
-            buttons_container = QWidget()
-            buttons_layout = QHBoxLayout(buttons_container)
-            buttons_layout.setContentsMargins(0, 0, 0, 0)
-            buttons_layout.setSpacing(4)
-            buttons_layout.addWidget(self.settings_button)
-            buttons_layout.addWidget(self.quit_button)
+        # Add title (centered) and buttons (right aligned) to the main title bar layout
+        title_bar_layout.addWidget(opacity_container, 0)  # Opacity slider on left
+        title_bar_layout.addWidget(
+            title_center_container, 1
+        )  # stretch=1 to occupy remaining space
+        title_bar_layout.setContentsMargins(12, 6, 0, 6)
+        title_bar_layout.addWidget(
+            buttons_container, 0, Qt.AlignmentFlag.AlignRight
+        )
 
-            # Add title (centered) and buttons (right aligned) to the main title bar layout
-            title_bar_layout.addWidget(opacity_container, 0)  # Opacity slider on left
-            title_bar_layout.addWidget(
-                title_center_container, 1
-            )  # stretch=1 to occupy remaining space
-            title_bar_layout.setContentsMargins(12, 6, 0, 6)
-            title_bar_layout.addWidget(
-                buttons_container, 0, Qt.AlignmentFlag.AlignRight
-            )
+        # Insert the title bar at the top of the main layout
+        layout.insertWidget(0, title_bar)
 
-            # Insert the title bar at the top of the main layout
-            layout.insertWidget(0, title_bar)
+        # Main UI content - FULL mode only
+        # STATE 1: Task input state (initial state)
+        self.input_container = QWidget()  # Container for input state
+        input_layout = QHBoxLayout(self.input_container)  # Horizontal layout
+        input_layout.setContentsMargins(0, 0, 0, 0)  # No margins
+        input_layout.setSpacing(6)  # Space between elements
 
-        # Check if we're in baseline mode
-        if APP_MODE == APP_MODE_BASIC:
-            # Create a single horizontal layout for BASIC mode - everything in one line
-            self.simplified_container = QWidget()
-            simplified_layout = QHBoxLayout(self.simplified_container)
-            simplified_layout.setContentsMargins(
-                12, 10, 12, 10
-            )  # Increased vertical margins for better spacing
-            simplified_layout.setSpacing(8)  # Increased spacing between elements
+        # Task input field
+        self.task_input = QTextEdit()
+        self.task_input.setPlaceholderText(TYPE_MESSAGE)  # Placeholder text
+        self.task_input.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
+        self.task_input.setWordWrapMode(
+            QTextOption.WrapMode.WordWrap
+        )  # Enable word wrap
 
-            # Add drag functionality to the entire simplified container
-            self.simplified_container.mousePressEvent = self.drag_bar_mouse_press
-            self.simplified_container.mouseMoveEvent = self.drag_bar_mouse_move
-            self.simplified_container.mouseReleaseEvent = self.drag_bar_mouse_release
+        # Ensure cursor is visible
+        self.task_input.setCursorWidth(2)  # Set cursor width
+        self.task_input.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextEditorInteraction
+        )
 
-            # Opacity slider (left side) - exactly same as App1/2
-            opacity_container = QWidget()
-            opacity_layout = QHBoxLayout(opacity_container)
-            opacity_layout.setContentsMargins(0, 0, 0, 0)
-            opacity_layout.setSpacing(4)
+        # Connect custom key event handler and mouse events
+        self.task_input.keyPressEvent = self.task_input_key_press
 
-            # Opacity label
-            opacity_label = QLabel("🔍")
-            opacity_label.setFixedSize(16, 16)
-            opacity_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            opacity_label.setStyleSheet("font-size: 12px;")
+        # Handle IME composition events for better Korean input support
+        self.task_input.inputMethodEvent = self.task_input_ime_event
 
-            # Opacity slider
-            self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
-            self.opacity_slider.setObjectName("opacitySlider")
-            self.opacity_slider.setMinimum(20)  # 20% (changed from 10)
-            self.opacity_slider.setMaximum(100)  # 100%
-            self.opacity_slider.setValue(100)  # Default 100%
-            self.opacity_slider.setFixedWidth(80)
-            self.opacity_slider.setFixedHeight(16)
-            self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
+        # Additional IME support - ensure proper text handling
+        self.task_input.textChanged.connect(self._on_text_changed)
 
-            opacity_layout.addWidget(opacity_label)
-            opacity_layout.addWidget(self.opacity_slider)
-            simplified_layout.addWidget(opacity_container, 0)  # No stretch
+        # Set button to confirm task
+        self.set_button = QPushButton(get_text("set_button"))  # Button to set task
+        self.set_button.clicked.connect(self.set_task)  # Click handler
+        self.set_button.setFixedWidth(BUTTON_WIDTH)  # Fixed button width
+        self.set_button.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
 
-            # Title label - moved more to the left with stretch
-            title_label = QLabel(APP_TITLE)
-            title_label.setObjectName("basicTitleLabel")
-            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            simplified_layout.addWidget(title_label, 1)  # Add stretch to center better
+        # Add widgets to input layout
+        input_layout.addWidget(self.task_input)
+        input_layout.addWidget(self.set_button)
 
-            # Start button (prominent blue button) - same height as other buttons
-            self.start_button = QPushButton(get_text("start_button"))
-            self.start_button.setObjectName("compactStartButton")
-            self.start_button.setFixedHeight(
-                START_BUTTON_HEIGHT
-            )  # Same height as other buttons
-            self.start_button.setFixedWidth(BUTTON_WIDTH)  # Wider to accommodate text
-            self.start_button.setCheckable(True)
-            self.start_button.clicked.connect(self.toggle_capture)
-            simplified_layout.addWidget(
-                self.start_button, 0, Qt.AlignmentFlag.AlignVCenter
-            )  # Center vertically
+        # STATE 2: Task display state (after task is set)
+        self.task_container = QWidget()  # Container for task display state
+        task_layout = QVBoxLayout(self.task_container)  # Vertical layout
+        task_layout.setContentsMargins(0, 0, 0, 0)  # No margins
+        task_layout.setSpacing(8)  # Space between elements
 
-            # Add spacer between Start button and right buttons
-            simplified_layout.addSpacing(0)  # Add spacing for better separation
+        # Task info container (task name and start/stop button)
+        task_info_container = QWidget()  # Container for task info
+        task_info_layout = QHBoxLayout(task_info_container)  # Horizontal layout
+        task_info_layout.setContentsMargins(0, 0, 0, 0)  # No margins
+        task_info_layout.setSpacing(6)  # Space between elements
 
-            # Create container for right side buttons - same as App1/2
-            buttons_container = QWidget()
-            buttons_layout = QHBoxLayout(buttons_container)
-            buttons_layout.setContentsMargins(0, 0, 0, 0)
-            buttons_layout.setSpacing(6)  # Increased spacing for better separation
+        # Task display field (replaces QLabel)
+        self.task_display = QTextEdit()
+        self.task_display.setObjectName("taskDisplay")
+        self.task_display.setReadOnly(False)
+        self.task_display.setWordWrapMode(QTextOption.WrapMode.WordWrap)
+        self.task_display.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.task_display.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.task_display.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
+        self.task_display.mousePressEvent = self.task_display_clicked
 
-            # Settings button - same size as App1/2
-            self.settings_button = QPushButton("⚙")
-            self.settings_button.setObjectName("settingsButton")
-            self.settings_button.setFixedSize(
-                QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE
-            )  # Increased size for better alignment
-            self.settings_button.clicked.connect(self.show_settings_menu)
-            buttons_layout.addWidget(self.settings_button)
+        # Start/Stop button
+        self.start_button = QPushButton(
+            get_text("start_button")
+        )  # Start/stop button
+        self.start_button.setObjectName("startButton")
+        self.start_button.setCheckable(True)
+        self.start_button.clicked.connect(self.toggle_capture)
+        self.start_button.setFixedWidth(BUTTON_WIDTH)
+        self.start_button.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
 
-            # Quit button (right side) - same size as App1/2
-            self.quit_button = QPushButton("✕")
-            self.quit_button.setObjectName("quitButton")
-            self.quit_button.setFixedSize(
-                QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE
-            )  # Increased size for better alignment
-            self.quit_button.clicked.connect(lambda: self.force_quit())
-            buttons_layout.addWidget(self.quit_button)
+        # Add widgets in correct order
+        task_info_layout.addWidget(self.task_display)
+        task_info_layout.addWidget(self.start_button)
 
-            simplified_layout.addWidget(
-                buttons_container,
-                0,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-            )
+        # Message label to show status/feedback
+        self.message_label = QLabel()  # Label for status messages
+        self.message_label.setObjectName("messageLabel")  # CSS selector name
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center text
+        self.message_label.setWordWrap(True)  # Enable word wrapping
+        self.message_label.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )  # Size policy for dynamic height
 
-            # Add to main layout (replace the title bar)
-            layout.addWidget(self.simplified_container)
+        # Add widgets to task layout
+        task_layout.addWidget(task_info_container)
+        task_layout.addWidget(self.message_label)
+        self.task_container.hide()  # Hide task container initially
 
-        else:
-            # 기존 UI: Full 모드 & Control 모드
-            # STATE 1: Task input state (initial state)
-            self.input_container = QWidget()  # Container for input state
-            input_layout = QHBoxLayout(self.input_container)  # Horizontal layout
-            input_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-            input_layout.setSpacing(6)  # Space between elements
-
-            # Task input field
-            self.task_input = QTextEdit()
-            self.task_input.setPlaceholderText(TYPE_MESSAGE)  # Placeholder text
-            self.task_input.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
-            self.task_input.setWordWrapMode(
-                QTextOption.WrapMode.WordWrap
-            )  # Enable word wrap
-
-            # Ensure cursor is visible
-            self.task_input.setCursorWidth(2)  # Set cursor width
-            self.task_input.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextEditorInteraction
-            )
-
-            # Connect custom key event handler and mouse events
-            self.task_input.keyPressEvent = self.task_input_key_press
-
-            # Handle IME composition events for better Korean input support
-            self.task_input.inputMethodEvent = self.task_input_ime_event
-
-            # Additional IME support - ensure proper text handling
-            self.task_input.textChanged.connect(self._on_text_changed)
-
-            # Set button to confirm task
-            self.set_button = QPushButton(get_text("set_button"))  # Button to set task
-            self.set_button.clicked.connect(self.set_task)  # Click handler
-            self.set_button.setFixedWidth(BUTTON_WIDTH)  # Fixed button width
-            self.set_button.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
-
-            # Add widgets to input layout
-            input_layout.addWidget(self.task_input)
-            input_layout.addWidget(self.set_button)
-
-            # STATE 2: Task display state (after task is set)
-            self.task_container = QWidget()  # Container for task display state
-            task_layout = QVBoxLayout(self.task_container)  # Vertical layout
-            task_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-            task_layout.setSpacing(8)  # Space between elements
-
-            # Task info container (task name and start/stop button)
-            task_info_container = QWidget()  # Container for task info
-            task_info_layout = QHBoxLayout(task_info_container)  # Horizontal layout
-            task_info_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-            task_info_layout.setSpacing(6)  # Space between elements
-
-            # Task display field (replaces QLabel)
-            self.task_display = QTextEdit()
-            self.task_display.setObjectName("taskDisplay")
-            self.task_display.setReadOnly(False)
-            self.task_display.setWordWrapMode(QTextOption.WrapMode.WordWrap)
-            self.task_display.setVerticalScrollBarPolicy(
-                Qt.ScrollBarPolicy.ScrollBarAsNeeded
-            )
-            self.task_display.setHorizontalScrollBarPolicy(
-                Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            )
-            self.task_display.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
-            self.task_display.mousePressEvent = self.task_display_clicked
-
-            # Start/Stop button
-            self.start_button = QPushButton(
-                get_text("start_button")
-            )  # Start/stop button
-            self.start_button.setObjectName("startButton")
-            self.start_button.setCheckable(True)
-            self.start_button.clicked.connect(self.toggle_capture)
-            self.start_button.setFixedWidth(BUTTON_WIDTH)
-            self.start_button.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
-
-            # Add widgets in correct order
-            task_info_layout.addWidget(self.task_display)
-            task_info_layout.addWidget(self.start_button)
-
-            # Message label to show status/feedback
-            self.message_label = QLabel()  # Label for status messages
-            self.message_label.setObjectName("messageLabel")  # CSS selector name
-            self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center text
-            self.message_label.setWordWrap(True)  # Enable word wrapping
-            self.message_label.setSizePolicy(
-                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
-            )  # Size policy for dynamic height
-
-            # Add widgets to task layout
-            task_layout.addWidget(task_info_container)
-            task_layout.addWidget(self.message_label)
-            self.task_container.hide()  # Hide task container initially
-
-            # Add both containers to main layout
-            layout.addWidget(self.input_container)  # Add input container
-            layout.addWidget(self.task_container)  # Add task container
+        # Add both containers to main layout
+        layout.addWidget(self.input_container)  # Add input container
+        layout.addWidget(self.task_container)  # Add task container
 
         # CSS styling for the dashboard
         self.setStyleSheet(
@@ -1275,9 +1142,8 @@ class Dashboard(QWidget):
             self.llm_client.clarification_manager.reset()
         print("[CLARIFICATION] Cleared previous clarification data for new task")
 
-        # Show clarification window only for FULL mode, skip for BASIC and REMINDER modes
-        if APP_MODE not in [APP_MODE_BASIC, APP_MODE_REMINDER]:
-            self.show_clarification_window(task)
+        # Show clarification window
+        self.show_clarification_window(task)
 
         # Start focus monitoring when intention is set
         self.start_focus_monitoring()
@@ -1308,16 +1174,14 @@ class Dashboard(QWidget):
         )
 
         # Re-enable UI elements when switching to input state
-        if APP_MODE != APP_MODE_BASIC:
-            self.task_display.setEnabled(True)
-            self.task_display.setStyleSheet("")
+        self.task_display.setEnabled(True)
+        self.task_display.setStyleSheet("")
 
         self.input_container.show()
         self.task_container.hide()
 
-        # Show history window when switching to input state (skip for BASIC mode)
-        if APP_MODE != APP_MODE_BASIC:
-            self.show_history_window()
+        # Show history window when switching to input state
+        self.show_history_window()
 
         # Completely hide message label
         self.message_label.hide()
@@ -1383,70 +1247,7 @@ class Dashboard(QWidget):
                 self.open_user_settings()
                 return
 
-        if APP_MODE == APP_MODE_BASIC:
-            # Baseline mode
-            if not self.is_capturing:
-                # Set default task name with intention as "알수없음"
-                self._current_task = "Don't know"
-
-                # Generate session_id for baseline mode
-                if not self.current_session_start_time:
-                    from datetime import datetime
-
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    clean_task_name = "".join(
-                        c
-                        for c in self._current_task
-                        if c.isalnum() or c in (" ", "-", "_")
-                    ).rstrip()
-                    clean_task_name = clean_task_name.replace(" ", "_")[:30]
-                    self.current_session_start_time = f"{clean_task_name}_{timestamp}"
-                    print(
-                        f"[DEBUG] Generated session_id for baseline: {self.current_session_start_time}"
-                    )
-                else:
-                    print(
-                        f"[DEBUG] Using existing session_id: {self.current_session_start_time}"
-                    )
-
-                # Start intention session (skip history tracking for BASIC mode)
-                if APP_MODE != APP_MODE_BASIC:
-                    self.start_intention_session(self._current_task)
-
-                # Change button state
-                self.start_button.setText(get_text("stop_button"))
-                self.start_button.setChecked(True)
-
-                # Change instruction message (only if instruction_label exists)
-                if hasattr(self, "instruction_label"):
-                    self.instruction_label.setText("Click 'Done' to finish activity ↑")
-
-                # Start recording signal
-                self.is_capturing = True
-                self.capture_started.emit()
-            else:
-                # End intention session (skip history tracking for BASIC mode)
-                if APP_MODE != APP_MODE_BASIC:
-                    self.end_intention_session()
-
-                # Clear session start time
-                self.current_session_start_time = None
-                print("[DEBUG] Session ended, session start time cleared")
-
-                # Change button state
-                self.start_button.setText("Start")
-                self.start_button.setChecked(False)
-
-                # Change instruction message (only if instruction_label exists)
-                if hasattr(self, "instruction_label"):
-                    self.instruction_label.setText("Click to start activity ↑")
-
-                # Stop recording signal
-                self.is_capturing = False
-                self.capture_stopped.emit()
-            return
-
-        # Existing Full/Control mode logic
+        # Check if task is set
         if not self._current_task:
             print("Error: No task set for capture")
             return
@@ -1456,9 +1257,8 @@ class Dashboard(QWidget):
             self.hide_clarification_window()
             self.hide_history_window()
 
-            # Show starting soon window only for non-reminder modes
-            if APP_MODE != APP_MODE_REMINDER:
-                self.show_starting_soon_window()
+            # Show starting soon window
+            self.show_starting_soon_window()
 
             # Use existing session_id (already generated when task was set)
             if not self.current_session_start_time:
@@ -1500,35 +1300,15 @@ class Dashboard(QWidget):
                 )
                 pass
 
-            # Start intention session (skip history tracking for BASIC mode)
-            if APP_MODE != APP_MODE_BASIC:
-                self.start_intention_session(self._current_task)
+            # Start intention session
+            self.start_intention_session(self._current_task)
 
             self.start_button.setText(get_text("stop_button"))
             self.is_capturing = True
             self.capture_started.emit()
 
             # Update to "set/started" state with message
-            if APP_MODE == APP_MODE_REMINDER:
-                # In reminder mode, show starting soon first, then replace with reminder message
-                if self._is_korean_text(self.current_task):
-                    # 한글이 포함된 경우
-                    encouragement_message = get_text(
-                        "encouragement_korean", task=self.current_task
-                    )
-                else:
-                    # 영어만 있는 경우
-                    encouragement_message = get_text(
-                        "encouragement_english", task=self.current_task
-                    )
-
-                # Show reminder message after starting soon window
-                QTimer.singleShot(
-                    1000, lambda: self._show_reminder_message(encouragement_message)
-                )
-            else:
-                # General mode
-                self.message_label.setText(CLICK_MESSAGE)
+            self.message_label.setText(CLICK_MESSAGE)
 
             self.task_display.setReadOnly(True)
             self.task_display.setStyleSheet(
@@ -1587,10 +1367,6 @@ class Dashboard(QWidget):
 
     def update_intention_level(self, level, message, raw_value=0.0):
         """Update the displayed intention level and message"""
-        # Baseline mode does not update UI
-        if APP_MODE == APP_MODE_BASIC:
-            return
-
         # Skip updating if session is no longer active
         if not self.is_capturing:
             print(f"[DEBUG] Ignoring analysis result - session is stopped")
@@ -1623,18 +1399,7 @@ class Dashboard(QWidget):
         #     # Update rating display in real-time
         #     self.update_rating_display()
 
-        if APP_MODE == APP_MODE_REMINDER:
-            # In reminder mode, receive server response but don't show UI updates
-            # Only store data for potential rating/feedback purposes
-            if self.is_capturing:
-                self.current_level = level
-                self.current_message = message
-
-                # Show LLM response window with appropriate color
-                self.show_llm_response_window(message, raw_value)
-            return
-
-        # 기존 Full 모드 로직
+        # Update level and message
         # Store level and message
         self.current_level = level
         self.current_message = message
@@ -1972,19 +1737,17 @@ class Dashboard(QWidget):
         self.load_and_display_today_history()
 
     def show_history_window(self):
-        """Show history window with animation (skip for BASIC mode)"""
-        if APP_MODE != APP_MODE_BASIC:
-            # Hide other windows that should not be visible with history
-            self.hide_clarification_window()
-            self.hide_llm_response_window()
-            self.hide_starting_soon_window()
+        """Show history window with animation"""
+        # Hide other windows that should not be visible with history
+        self.hide_clarification_window()
+        self.hide_llm_response_window()
+        self.hide_starting_soon_window()
 
-            self.window_manager.show_window_with_animation("history")
+        self.window_manager.show_window_with_animation("history")
 
     def hide_history_window(self):
-        """Hide history window with animation (skip for BASIC mode)"""
-        if APP_MODE != APP_MODE_BASIC:
-            self.window_manager.hide_window_with_animation("history")
+        """Hide history window with animation"""
+        self.window_manager.hide_window_with_animation("history")
 
     def show_clarification_window(self, initial_task):
         """Show clarification window with initial AI message"""
@@ -2087,10 +1850,6 @@ class Dashboard(QWidget):
 
     def llm_response_enter_event(self, event):
         """Show feedback window when mouse enters LLM response window"""
-        # Skip feedback in REMINDER mode
-        if APP_MODE == APP_MODE_REMINDER:
-            return
-
         # Cancel any pending hide timer
         if hasattr(self, "feedback_hide_timer") and self.feedback_hide_timer.isActive():
             self.feedback_hide_timer.stop()
@@ -2129,10 +1888,6 @@ class Dashboard(QWidget):
 
     def llm_response_leave_event(self, event):
         """Hide feedback window when mouse leaves LLM response window"""
-        # Skip feedback in REMINDER mode
-        if APP_MODE == APP_MODE_REMINDER:
-            return
-
         # Start timer to hide feedback window after short delay
         if not hasattr(self, "feedback_hide_timer"):
             self.feedback_hide_timer = QTimer()
@@ -2186,10 +1941,6 @@ class Dashboard(QWidget):
 
     def handle_feedback_click(self, feedback_type, button):
         """Handle feedback button click with simple border highlight"""
-        # Skip feedback in REMINDER mode
-        if APP_MODE == APP_MODE_REMINDER:
-            return
-
         # Stop any hide timers
         if hasattr(self, "feedback_hide_timer") and self.feedback_hide_timer:
             self.feedback_hide_timer.stop()
@@ -2581,9 +2332,6 @@ class Dashboard(QWidget):
         self.stop_focus_monitoring()
 
         # Clean up all manager threads
-        if hasattr(self, "session_rating_manager"):
-            self.session_rating_manager.cleanup()
-
         if hasattr(self, "llm_client"):
             self.llm_client.cleanup()
 
@@ -2965,14 +2713,8 @@ class Dashboard(QWidget):
                 # Update rating display immediately
                 self.update_rating_display()
 
-        # Send rating to backend
-        if self.session_rating_manager and session_info["session_id"]:
-            print(f"[RATING] Sending rating to backend: {rating}/5")
-            self.session_rating_manager.send_session_rating(
-                rating=rating, session_info=session_info, task_name=self.current_task
-            )
-        else:
-            print("[RATING] Warning: Could not send rating - missing session info")
+        # Backend rating removed - rating saved locally only
+        print(f"[RATING] Rating saved locally: {rating}/5")
 
         # Hide rating window after 1 second and show history
         QTimer.singleShot(1000, self.on_rating_complete)
@@ -3013,67 +2755,47 @@ class Dashboard(QWidget):
 
     def disable_ui_for_rating(self):
         """Disable all UI elements when rating window is visible"""
-        if APP_MODE == APP_MODE_BASIC:
-            # Baseline mode - disable start button
-            self.start_button.setEnabled(False)
-            self.start_button.setStyleSheet(
-                """
-                #bigStartButton {
-                    background-color: #666666;
-                    color: #999999;
-                    font-size: 24px;
-                    font-weight: bold;
-                    border-radius: 10px;
-                }
-            """
-            )
-        else:
-            # Full/Control mode - disable task display and start button
-            self.task_display.setEnabled(False)
-            self.start_button.setEnabled(False)
+        # Disable task display and start button
+        self.task_display.setEnabled(False)
+        self.start_button.setEnabled(False)
 
-            # Apply disabled styling
-            self.task_display.setStyleSheet(
-                """
-                QTextEdit#taskDisplay { 
-                    background-color: #666666; 
-                    border-radius: 8px; 
-                    padding: 8px 12px; 
-                    font-size: 13px; 
-                    color: #999999; 
-                }
+        # Apply disabled styling
+        self.task_display.setStyleSheet(
             """
-            )
+            QTextEdit#taskDisplay { 
+                background-color: #666666; 
+                border-radius: 8px; 
+                padding: 8px 12px; 
+                font-size: 13px; 
+                color: #999999; 
+            }
+        """
+        )
 
-            self.start_button.setStyleSheet(
-                """
-                #startButton {
-                    background-color: #666666;
-                    color: #999999;
-                    font-size: 14px;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 8px 12px;
-                    font-weight: 600;
-                    min-width: 40px;
-                }
+        self.start_button.setStyleSheet(
             """
-            )
+            #startButton {
+                background-color: #666666;
+                color: #999999;
+                font-size: 14px;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-weight: 600;
+                min-width: 40px;
+            }
+        """
+        )
 
     def enable_ui_after_rating(self):
         """Re-enable all UI elements after rating is complete"""
-        if APP_MODE == APP_MODE_BASIC:
-            # Baseline mode - re-enable start button
-            self.start_button.setEnabled(True)
-            self.start_button.setStyleSheet("")  # Reset to default stylesheet
-        else:
-            # Full/Control mode - re-enable task display and start button
-            self.task_display.setEnabled(True)
-            self.start_button.setEnabled(True)
+        # Re-enable task display and start button
+        self.task_display.setEnabled(True)
+        self.start_button.setEnabled(True)
 
-            # Reset to default styling
-            self.task_display.setStyleSheet("")
-            self.start_button.setStyleSheet("")
+        # Reset to default styling
+        self.task_display.setStyleSheet("")
+        self.start_button.setStyleSheet("")
 
     def on_intention_selected(self, intention, record):
         """Handle intention selection from timeline"""
@@ -3377,9 +3099,8 @@ class Dashboard(QWidget):
         # Hide clarification window immediately
         self.hide_clarification_window()
 
-        # Show starting soon window immediately (if not reminder mode)
-        if APP_MODE != APP_MODE_REMINDER:
-            self.show_starting_soon_window()
+        # Show starting soon window immediately
+        self.show_starting_soon_window()
 
         # Update task display to readonly mode immediately
         self.task_display.setReadOnly(True)
@@ -3387,9 +3108,8 @@ class Dashboard(QWidget):
             "background-color: #343434; color: white; border-radius: 8px;"
         )
 
-        # Start intention session immediately (skip history tracking for BASIC mode)
-        if APP_MODE != APP_MODE_BASIC:
-            self.start_intention_session(self._current_task)
+        # Start intention session immediately
+        self.start_intention_session(self._current_task)
 
         # Handle clarification completion in background
         if hasattr(self, "llm_client") and hasattr(
@@ -3446,23 +3166,8 @@ class Dashboard(QWidget):
                     self.current_clarification_data
                 )
 
-        # Update message based on APP_MODE
-        if APP_MODE == APP_MODE_REMINDER:
-            # In reminder mode, show encouragement message
-            if self._is_korean_text(self.current_task):
-                encouragement_message = get_text(
-                    "encouragement_korean", task=self.current_task
-                )
-            else:
-                encouragement_message = get_text(
-                    "encouragement_english", task=self.current_task
-                )
-            QTimer.singleShot(
-                1000, lambda: self._show_reminder_message(encouragement_message)
-            )
-        else:
-            # General mode
-            self.message_label.setText(CLICK_MESSAGE)
+        # Update message
+        self.message_label.setText(CLICK_MESSAGE)
 
         print(
             "[CLARIFICATION] UI state updated immediately, clarification processing in background"
@@ -3813,26 +3518,12 @@ class Dashboard(QWidget):
         CLICK_MESSAGE = get_text("click_message")
 
         # Update window title
-        if APP_MODE == APP_MODE_FULL:
-            APP_TITLE = get_text("app_title_1")
-        elif APP_MODE == APP_MODE_REMINDER:
-            APP_TITLE = get_text("app_title_2")
-        elif APP_MODE == APP_MODE_BASIC:
-            APP_TITLE = get_text("app_title_3")
-        else:
-            APP_TITLE = get_text("app_title_test")
-
+        APP_TITLE = get_text("app_title_1")
         self.setWindowTitle(APP_TITLE)
 
         # Update drag bar text
         if hasattr(self, "drag_bar"):
             self.drag_bar.setText(APP_TITLE)
-
-        # Update basic mode title label
-        if APP_MODE == APP_MODE_BASIC and hasattr(self, "findChild"):
-            basic_title_label = self.findChild(QLabel, "basicTitleLabel")
-            if basic_title_label:
-                basic_title_label.setText(APP_TITLE)
 
         # Update placeholder text
         if hasattr(self, "task_input"):

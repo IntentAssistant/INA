@@ -19,28 +19,28 @@ from ..config.constants import (
     CAPTURE_INTERVAL,
     LLM_INVOKE_INTERVAL,
     LLM_ANALYSIS_IMAGE_COUNT,
-    LOCAL_MODE_LLM_API_ENDPOINT,
     DEFAULT_STORAGE_DIR,
     IMAGE_QUALITY,
-    APP_MODE,
 )
+
+from .direct_llm_client import get_configured_client
 
 
 class LLMAnalysisThread(QThread):
     analysis_complete = pyqtSignal(dict)
     analysis_error = pyqtSignal(str)
 
-    def __init__(self, prompt, images, user_info, parent=None):
+    def __init__(self, prompt, image_data, user_info, parent=None):
         super().__init__(parent)
         self.prompt = prompt
-        self.images = images
+        self.image_data = image_data  # Raw image bytes instead of file paths
         self.user_info = user_info
         self.setObjectName(f"LLMThread_{id(self)}")
         # Add thread termination flag
         self._is_stopping = False
         # Add timeout for network requests
-        self._request_timeout = 10  # 10 seconds max
-        self._session = None
+        self._request_timeout = 30  # 30 seconds for direct API calls
+        self.llm_client = None
 
     def __del__(self):
         """Safe destructor to prevent crash during garbage collection"""
@@ -59,13 +59,9 @@ class LLMAnalysisThread(QThread):
             print(f"[LLM_THREAD] Safely quitting thread {self.objectName()}")
             self._is_stopping = True
 
-            # Close network session first
-            if hasattr(self, "_session") and self._session:
-                try:
-                    self._session.close()
-                    print(f"[LLM_THREAD] Session closed for {self.objectName()}")
-                except Exception as e:
-                    print(f"[LLM_THREAD] Error closing session: {e}")
+            # Clean up LLM client if any
+            if hasattr(self, "llm_client") and self.llm_client:
+                self.llm_client = None
 
             if self.isRunning():
                 # Try graceful quit first
@@ -92,161 +88,69 @@ class LLMAnalysisThread(QThread):
 
     def run(self):
         try:
-            # Only show analysis status, not full prompt details
-            prompt_length = len(self.prompt) if self.prompt else 0
-
-            # Simple processing status
-            for img_path in self.images:
-                img_size_kb = os.path.getsize(img_path) / 1024
-                print(
-                    f"[ANALYSIS] Processing: {os.path.basename(img_path)} ({img_size_kb:.1f} KB)"
-                )
-
-            # Prepare image data
-            image_info = (
-                []
-            )  # Store image information including filenames and encoded data
-
-            print("\n=== Processing Images for Analysis ===")
-            # Copy image file list (to prevent modifying original)
-            images_to_process = self.images.copy()
-
-            for img_path in images_to_process:
-                # Check for thread termination request
-                if self._is_stopping:
-                    print("Thread termination requested, stopping image processing")
-                    return
-
-                try:
-                    with open(img_path, "rb") as img_file:
-                        file_size = os.path.getsize(img_path)
-                        if file_size > 5 * 1024 * 1024:
-                            print(
-                                f"Skipping large image: {img_path} ({file_size/1024/1024:.2f} MB)"
-                            )
-                            continue
-
-                        # Encode image
-                        encoded = base64.b64encode(img_file.read()).decode("utf-8")
-
-                        # Save file information
-                        file_name = os.path.basename(img_path)
-                        print(
-                            f"Processing image: {file_name} ({file_size/1024:.1f} KB)"
-                        )
-
-                        image_info.append(
-                            {"file_name": file_name, "encoded_data": encoded}
-                        )
-
-                        # Memory optimization: Run garbage collection after processing each image
-                        import gc
-
-                        gc.collect()
-                except Exception as e:
-                    print(f"Error processing image {img_path}: {e}")
-                    continue
-
             # Check for thread termination request
             if self._is_stopping:
-                print("Thread termination requested, stopping analysis")
+                print("Thread termination requested before starting analysis")
                 return
 
-            if not image_info:
-                self.analysis_error.emit("No valid images to analyze")
+            # Get configured LLM client
+            try:
+                self.llm_client = get_configured_client()
+                if not self.llm_client:
+                    self.analysis_error.emit(
+                        "No LLM API configured. Please set OPENAI_API_KEY or GEMINI_API_KEY environment variable."
+                    )
+                    return
+            except Exception as e:
+                self.analysis_error.emit(f"Failed to initialize LLM client: {str(e)}")
                 return
 
             print(
                 f"[LLM] Requesting analysis for: {self.user_info.get('current_task', 'No task')}"
             )
-
-            # Prepare session info for new backend schema
-            session_info = {
-                "user_id": self.user_info.get("name", "default_user"),
-                "session_id": self.user_info.get("session_id", "unknown_session"),
-                "task_name": self.user_info.get("current_task", "No task specified"),
-                "intention": self.user_info.get(
-                    "current_task", "No task specified"
-                ),  # intention = task_name for now
-                "device_name": self.user_info.get("device_name", "mac_os_device"),
-                "app_mode": APP_MODE,
-                "notification": self.user_info.get(
-                    "notification", False
-                ),  # Add notification flag
-            }
-
-            # Prepare frontmost app information (single object)
-            frontmost_app = self.user_info.get("frontmost_app", None)
-
-            # Prepare request data for new /analyze endpoint schema (single image)
-            request_data = {
-                "prompt": self.prompt,
-                "image": image_info[0]["encoded_data"],  # Single image instead of array
-                "image_file": image_info[0]["file_name"],  # Single filename
-                "image_num": self.user_info.get(
-                    "image_num", 1
-                ),  # Session-based image counter
-                "app_change": self.user_info.get(
-                    "app_change", False
-                ),  # App change detection flag
-                "session_info": session_info,
-                "frontmost_app": frontmost_app,  # Single app info instead of array
-                "opacity": self.user_info.get(
-                    "opacity", 1.0
-                ),  # Dashboard opacity as separate field
-            }
+            print(f"[LLM] Using provider: {self.llm_client.provider.value}")
 
             # Check for thread termination request
             if self._is_stopping:
-                print("Thread termination requested, stopping before server request")
+                print("Thread termination requested before analysis")
                 return
 
-            # Set request timeout and create session for better control
-            try:
-                # Create session for better connection control
-                if not self._session:
-                    import requests
+            # Prepare context for analysis
+            context = {
+                "current_task": self.user_info.get("current_task", "No task specified"),
+                "frontmost_app": self.user_info.get("frontmost_app", {}),
+                "session_id": self.user_info.get("session_id", "unknown_session"),
+                "user_id": self.user_info.get("name", "default_user"),
+                "device_name": self.user_info.get("device_name", "mac_os_device"),
+                "notification": self.user_info.get("notification", False),
+                "image_num": self.user_info.get("image_num", 1),
+                "app_change": self.user_info.get("app_change", False),
+                "opacity": self.user_info.get("opacity", 1.0),
+            }
 
-                    self._session = requests.Session()
+            # Analyze screen using direct LLM API
+            result = self.llm_client.analyze_screen(
+                image_data=self.image_data, prompt=self.prompt, context=context
+            )
 
-                # Check termination before network request
-                if self._is_stopping:
-                    print("Thread termination requested before network call")
-                    return
+            # Check for thread termination request
+            if self._is_stopping:
+                print("Thread termination requested after analysis")
+                return
 
-                # Send request to server with shorter timeout
-                response = self._session.post(
-                    LOCAL_MODE_LLM_API_ENDPOINT,
-                    json=request_data,
-                    headers={"Content-Type": "application/json"},
-                    timeout=self._request_timeout,  # Use configurable timeout
-                )
+            # Process the result
+            output_score = result.get("output", "Unknown")
+            reason = result.get("reason", "No reason")
+            print(f"[LLM] Analysis complete (Score: {output_score}): {reason}")
 
-                # Check for thread termination request
-                if self._is_stopping:
-                    print("Thread termination requested, stopping after server request")
-                    return
+            # Add metadata to result for compatibility
+            result["analyzed_images"] = []  # No local images anymore
+            result["analyzed_image_count"] = 1
+            result["primary_analyzed_image"] = None  # No local image path
 
-                # Memory optimization: Run garbage collection after sending request
-                import gc
-
-                gc.collect()
-
-                self.process_server_response(response)
-            except requests.exceptions.Timeout:
-                if not self._is_stopping:
-                    print("Server request timed out")
-                    self.analysis_error.emit("Server request timed out")
-                else:
-                    print("[LLM_THREAD] Thread stopped, suppressing timeout error")
-            except requests.exceptions.RequestException as e:
-                if not self._is_stopping:
-                    print(f"Request error: {e}")
-                    self.analysis_error.emit(f"Request error: {str(e)}")
-                else:
-                    print(
-                        f"[LLM_THREAD] Thread stopped, suppressing network error: {str(e)}"
-                    )
+            # Emit the result
+            if self.analysis_complete and not self._is_stopping:
+                self.analysis_complete.emit(result)
 
         except Exception as e:
             if not self._is_stopping:  # Only emit error signal if not terminating
@@ -263,39 +167,9 @@ class LLMAnalysisThread(QThread):
         # Call parent terminate
         super().terminate()
 
+    # Legacy method - no longer used with direct API calls
     def process_server_response(self, response):
-        """Process server response and update status"""
-        # Check for thread termination request
-        if self._is_stopping:
-            print("Thread termination requested, stopping response processing")
-            return
-
-        if response.status_code == 200:
-            result = response.json()
-            output_score = result.get("output", "Unknown")
-            reason = result.get("reason", "No reason")
-            print(f"[LLM] Analysis complete (Score: {output_score}): {reason}")
-
-            # Add analyzed image paths to the result for feedback tracking
-            result["analyzed_images"] = (
-                self.images.copy()
-            )  # Include original image paths
-            result["analyzed_image_count"] = len(self.images)
-
-            # For single image analysis, set primary analyzed image
-            if len(self.images) == 1:
-                result["primary_analyzed_image"] = self.images[0]
-            else:
-                # For multiple images, use the most recent one as primary
-                result["primary_analyzed_image"] = (
-                    self.images[0] if self.images else None
-                )
-
-            # Update intention status with enhanced server response
-            if self.analysis_complete and not self._is_stopping:
-                self.analysis_complete.emit(result)
-        else:
-            print(f"Error: {response.status_code}")
-            print(response.text)
-            if not self._is_stopping:  # Only emit error signal if not terminating
-                self.analysis_error.emit(response.text)
+        """Deprecated: Process server response (not used with direct API calls)"""
+        print(
+            "[LLM_THREAD] process_server_response called but not used with direct API"
+        )

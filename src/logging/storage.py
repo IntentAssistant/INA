@@ -16,33 +16,36 @@ class LocalStorage:
         self.ensure_required_files()
 
     def setup_storage_directory(self):
-        """Setup storage directory structure for app data"""
+        """Setup storage directory structure for app data (no image storage)"""
         # Use the DEFAULT_STORAGE_DIR from constants (mode-specific directory)
         base_storage_dir = os.path.expanduser(DEFAULT_STORAGE_DIR)
 
-        # Create the base storage directory structure
+        # Create the base storage directory structure (no screenshots dir)
         self.app_data_dir = base_storage_dir
-        self.screenshots_dir = os.path.join(self.app_data_dir, "screenshots")
 
-        # Create subdirectories for intention data
+        # Create subdirectories for intention data only
         self.intention_history_dir = os.path.join(
             self.app_data_dir, "intention_history"
         )
         self.clarification_data_dir = os.path.join(
             self.app_data_dir, "clarification_data"
         )
+        self.session_data_dir = os.path.join(self.app_data_dir, "session_data")
 
-        # Ensure all required directories exist
+        # Ensure all required directories exist (no screenshots)
         os.makedirs(self.app_data_dir, exist_ok=True)
-        os.makedirs(self.screenshots_dir, exist_ok=True)
         os.makedirs(self.intention_history_dir, exist_ok=True)
         os.makedirs(self.clarification_data_dir, exist_ok=True)
+        os.makedirs(self.session_data_dir, exist_ok=True)
 
         # Only print directory info once during app initialization
         print(f"[STORAGE] Data directory: {self.app_data_dir}")
+        print(
+            f"[STORAGE] Images are no longer stored locally - processed in memory only"
+        )
 
-        # Set storage_dir to screenshots directory
-        self.storage_dir = self.screenshots_dir
+        # Set storage_dir to session data directory
+        self.storage_dir = self.session_data_dir
 
     def ensure_required_files(self):
         """Ensure all required files exist with proper initial content"""
@@ -94,9 +97,9 @@ class LocalStorage:
             self.task_start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
             print(f"[STORAGE] Generated new timestamp: {self.task_start_time}")
 
-        task_dir = self.get_capture_dir()
-        os.makedirs(task_dir, exist_ok=True)
-        print(f"[STORAGE] Image capture directory: {task_dir}")
+        session_dir = self.get_capture_dir()
+        os.makedirs(session_dir, exist_ok=True)
+        print(f"[STORAGE] Session data directory: {session_dir}")
 
     def get_capture_dir(self):
         """Return the directory path for storing captures"""
@@ -110,17 +113,9 @@ class LocalStorage:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def save_image(self, image):
-        if not image:
-            return None, None
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{self.user_name}_{self.task_name}_{timestamp}.jpg"
-
-        save_dir = self.get_capture_dir()
-        filepath = os.path.join(save_dir, filename)
-
-        image.save(filepath, "JPEG", quality=85)
-        return filepath, filename
+        """Deprecated: Images are no longer saved locally"""
+        print("[STORAGE] Image saving disabled - images processed in memory only")
+        return None, None
 
     def save_llm_result(self, result: dict):
         """Append full LLM result to a JSON log file - simple version without rotation"""

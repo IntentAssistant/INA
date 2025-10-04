@@ -8,7 +8,7 @@ import threading
 import time
 import regex as re
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
 from .ui.menu import AppMenu
@@ -22,10 +22,10 @@ from .config.prompt_config import PromptConfig
 
 from .manager import ThreadManager
 
-from .logging.cloud import CloudUploader
 from .logging.storage import LocalStorage
 
 from .utils.launch_at_login import ensure_login_item
+from .config.api_config import get_api_config_manager, API_CONFIG
 
 # Hide IMK related logs
 logging.getLogger().setLevel(logging.ERROR)
@@ -38,7 +38,6 @@ class IntentionalComputingApp(rumps.App):
         print(f"\n=== Intentional Computing v{APP_VERSION} ===")
         print(f"Config directory: {CONFIG_DIR}")
         print(f"Storage directory: {DEFAULT_STORAGE_DIR}")
-        print(f"App mode: {APP_MODE}")
 
         # Initialize rumps app with minimal visibility
         super().__init__(
@@ -72,7 +71,6 @@ class IntentionalComputingApp(rumps.App):
         # Initialize timers
         self.capture_timer = QTimer()
         self.llm_timer = QTimer()
-        self.reminder_timer = None
 
         # Connect timer signals
         self.capture_timer.timeout.connect(self.do_capture)
@@ -81,7 +79,6 @@ class IntentionalComputingApp(rumps.App):
         # Initialize other variables
         self.current_message = None
         self.last_server_message = None
-        self.reminder_counter = 0
 
         # Initialize icons first
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
@@ -109,9 +106,11 @@ class IntentionalComputingApp(rumps.App):
         # Check initial setup
         self.check_initial_setup()
 
+        # Check API configuration
+        self.check_api_configuration()
+
         # Check display count after QApplication is ready
         self._check_display_count()
-        self.uploader = CloudUploader(CLOUD_STORAGE_ENDPOINT)
         self.prompt_config = PromptConfig(self.storage)  # Pass storage to prompt_config
 
         # Get selected display from settings - but force to 0 for single display
@@ -121,7 +120,6 @@ class IntentionalComputingApp(rumps.App):
         # Create ThreadManager first
         self.manager = ThreadManager(
             self.storage,
-            self.uploader,
             self.prompt_config,
             None,  # Dashboard will be set later
             self.config,
@@ -139,16 +137,6 @@ class IntentionalComputingApp(rumps.App):
 
         # Store notification context for feedback
         self.notification_context = {}
-
-        # Setup reminder timer for reminder mode
-        self.reminder_counter = 0  # 리마인더 카운터 초기화 (25분 간격)
-
-        if APP_MODE == APP_MODE_REMINDER:
-            print("Setting up reminder timer for reminder mode")
-            self.reminder_timer = QTimer()
-            self.reminder_timer.setInterval(25 * 60 * 1000)  # 25 minutes
-            self.reminder_timer.timeout.connect(self._handle_reminder)
-            print(f"Reminder timer setup complete for {APP_MODE} mode")
 
         # Setup menu and initialize state
         self.menu = AppMenu.create_menu(self)
@@ -203,21 +191,22 @@ class IntentionalComputingApp(rumps.App):
             print(f"[ERROR] Test capture failed: {e}")
 
     def _check_display_count(self):
-        """Check if multiple displays are connected and exit if so"""
+        """Check displays and automatically select the primary one"""
         try:
             screens = QApplication.screens()
             display_count = len(screens)
 
-            if display_count == 1:
-                # Single display detected - automatically select it
+            # Always use the first display (primary)
+            if display_count >= 1:
                 screen = screens[0]
                 geometry = screen.geometry()
                 name = screen.name() or "Primary Display"
                 resolution = f"{geometry.width()}x{geometry.height()}"
 
-                print(f"[INIT] Display: {name} ({resolution})")
+                print(f"[INIT] Display count: {display_count}")
+                print(f"[INIT] Using primary display: {name} ({resolution})")
 
-                # Force set the display selection to 0 (the only available display)
+                # Always use first display
                 self.config.update_settings({"selected_display": 0})
                 # Only set manager's selected_display if manager exists
                 if hasattr(self, "manager") and self.manager is not None:
@@ -228,28 +217,14 @@ class IntentionalComputingApp(rumps.App):
                         "[INIT] Manager not yet initialized, display setting saved to config"
                     )
 
-            elif display_count > 1:
-                # Show error message with display information
-                display_info = []
-                for i, screen in enumerate(screens):
-                    geometry = screen.geometry()
-                    name = screen.name() or f"Display {i+1}"
-                    resolution = f"{geometry.width()}x{geometry.height()}"
-                    display_info.append(f"• {name}: {resolution}")
-
-                display_list = "\n".join(display_info)
-
-                print(
-                    f"[ERROR] Multiple displays detected ({display_count}). App will exit."
-                )
-
-                # Show prominent center dialog instead of system notification
-                Dialogs.show_multiple_display_error(display_count, display_list)
-
-                # Exit the application immediately after dialog closes
-                print("[INIT] Exiting due to multiple display configuration")
-                QApplication.quit()
-                sys.exit(1)
+                # Show all connected displays for info
+                if display_count > 1:
+                    print(f"[INIT] Multiple displays detected ({display_count}):")
+                    for i, scr in enumerate(screens):
+                        geo = scr.geometry()
+                        nm = scr.name() or f"Display {i+1}"
+                        res = f"{geo.width()}x{geo.height()}"
+                        print(f"[INIT]   {i}: {nm} ({res})")
 
         except Exception as e:
             print(f"[ERROR] Display check failed: {e}")
@@ -275,94 +250,27 @@ class IntentionalComputingApp(rumps.App):
         print(f"Remaining displays after removal: {len(screens)}")
 
     def _check_display_count_runtime(self, change_type):
-        """Check display count during runtime and exit if multiple displays detected"""
+        """Check display count during runtime - now just logs info"""
         try:
             screens = QApplication.screens()
             display_count = len(screens)
 
-            print(f"Display {change_type}: Now {display_count} display(s) connected")
+            print(
+                f"[DISPLAY] Display {change_type}: Now {display_count} display(s) connected"
+            )
 
-            # Show immediate system notification for debugging
+            # Just log the displays, don't exit
             if display_count > 1:
-                print("[IMMEDIATE] Sending immediate system notification...")
-                title = (
-                    "멀티 디스플레이 감지"
-                    if change_type == "added"
-                    else "Multiple Display Detected"
-                )
-                rumps.notification(
-                    title,
-                    (
-                        "앱이 곧 종료됩니다"
-                        if title.startswith("멀티")
-                        else "App will exit soon"
-                    ),
-                    (
-                        f"{display_count}개의 디스플레이가 감지되었습니다."
-                        if title.startswith("멀티")
-                        else f"Detected {display_count} displays."
-                    ),
-                    sound=True,
-                )
-                print("[IMMEDIATE] Immediate notification sent")
-
-            if display_count > 1:
-                # Show error message with display information
-                display_info = []
+                print(f"[DISPLAY] Multiple displays detected ({display_count}):")
                 for i, screen in enumerate(screens):
                     geometry = screen.geometry()
                     name = screen.name() or f"Display {i+1}"
                     resolution = f"{geometry.width()}x{geometry.height()}"
-                    display_info.append(f"• {name}: {resolution}")
-
-                display_list = "\n".join(display_info)
-
-                print(
-                    f"ERROR: Multiple displays detected during runtime ({display_count}). App will exit."
-                )
-                print(f"Displays:\n{display_list}")
-
-                # Use QTimer to ensure dialog is shown in main thread
-                def show_dialog_and_exit():
-                    try:
-                        print("[DIALOG] ===== SHOWING MULTI-DISPLAY DIALOG =====")
-                        print(f"[DIALOG] Display count: {display_count}")
-                        print(f"[DIALOG] Display list: {display_list}")
-
-                        # Force bring QApplication to front
-                        if self.qt_app:
-                            self.qt_app.processEvents()
-                            # QApplication doesn't have activateWindow, just process events
-
-                        # Show prominent center dialog
-                        print("[DIALOG] Calling Dialogs.show_multiple_display_error...")
-                        result = Dialogs.show_multiple_display_error(
-                            display_count, display_list
-                        )
-                        print(f"[DIALOG] Dialog result: {result}")
-                        print("[DIALOG] Dialog closed, proceeding to exit...")
-
-                        # Exit the application immediately after dialog closes
-                        print(
-                            "[APP] Exiting due to multiple display configuration during runtime..."
-                        )
-                        self._force_quit_app()
-
-                    except Exception as e:
-                        print(f"[ERROR] Error showing dialog: {e}")
-                        import traceback
-
-                        print(f"[ERROR] Traceback: {traceback.format_exc()}")
-                        # Force exit even if dialog fails
-                        self._force_quit_app()
-
-                print("[TIMER] Setting QTimer.singleShot for dialog...")
-                # Use QTimer to ensure proper execution in main thread
-                QTimer.singleShot(100, show_dialog_and_exit)
-                print("[TIMER] QTimer.singleShot set successfully")
+                    print(f"[DISPLAY]   {i}: {name} ({resolution})")
+                print(f"[DISPLAY] Continuing to use primary display (index 0)")
 
         except Exception as e:
-            print(f"Error checking display count during runtime: {e}")
+            print(f"[ERROR] Error checking display count during runtime: {e}")
             import traceback
 
             print(traceback.format_exc())
@@ -378,21 +286,8 @@ class IntentionalComputingApp(rumps.App):
         print("\n=== Handling Capture Start ===")
         self.reset_state_tracking()
 
-        # 리마인더 카운터 초기화
-        self.reminder_counter = 0
-        print("Reminder counter reset to 0")
-
         # Start auto capture
         self.manager.start(self.do_capture, self.update_intention_status)
-
-        # Start reminder timer if in reminder mode
-        if APP_MODE == APP_MODE_REMINDER and self.reminder_timer:
-            print("Starting reminder timer in capture start...")
-            self.reminder_timer.start()
-            print(
-                f"Reminder timer started - Interval: {self.reminder_timer.interval()}ms"
-            )
-            print(f"Timer is active: {self.reminder_timer.isActive()}")
 
         self.set_recording_icon()
         print("=== Capture Start Handling Complete ===\n")
@@ -403,15 +298,6 @@ class IntentionalComputingApp(rumps.App):
 
         # Stop auto capture
         self.manager.stop()
-
-        # 리마인더 카운터 초기화
-        self.reminder_counter = 0
-
-        # Stop reminder timer if active
-        if self.reminder_timer and self.reminder_timer.isActive():
-            print("Stopping reminder timer...")
-            self.reminder_timer.stop()
-            print("Reminder timer stopped")
 
         self.set_default_icon()
         print("=== Capture Stop Handling Complete ===\n")
@@ -449,6 +335,115 @@ class IntentionalComputingApp(rumps.App):
         except Exception as e:
             print(f"[ERROR] Initial setup check failed: {e}")
             return False
+
+    def check_api_configuration(self):
+        """Check if API is properly configured and show guidance if needed"""
+        try:
+            api_manager = get_api_config_manager()
+            configured_providers = api_manager.get_configured_providers()
+
+            if not configured_providers:
+                print("[INIT] No API providers configured")
+
+                # Show API setup guidance dialog after a short delay
+                QTimer.singleShot(3000, self._show_api_setup_guidance)
+            else:
+                active_provider = api_manager.get_provider()
+                provider_names = [
+                    API_CONFIG[p.value]["display_name"] for p in configured_providers
+                ]
+                active_name = API_CONFIG[active_provider.value]["display_name"]
+
+                print(
+                    f"[INIT] API configured - Active: {active_name}, Available: {', '.join(provider_names)}"
+                )
+
+        except Exception as e:
+            print(f"[ERROR] API configuration check failed: {e}")
+
+    def _show_api_setup_guidance(self):
+        """Show API setup guidance dialog"""
+        try:
+            from .ui.api_settings_dialog import APISettingsDialog
+            from .ui.dialogs import Dialogs
+
+            # Show information dialog first
+            from PyQt6.QtWidgets import QMessageBox
+
+            msg = QMessageBox()
+            msg.setWindowTitle("API Configuration Required - AIM")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText("Welcome to AIM (Aligned Intention Monitoring)!")
+            msg.setInformativeText(
+                "To use AIM, you need to configure an AI model provider (OpenAI GPT or Google Gemini).\n\n"
+                "Would you like to configure your API settings now?"
+            )
+
+            # Add buttons
+            configure_btn = msg.addButton(
+                "Configure Now", QMessageBox.ButtonRole.AcceptRole
+            )
+            later_btn = msg.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+            msg.setDefaultButton(configure_btn)
+
+            # Style the message box
+            msg.setStyleSheet(
+                """
+                QMessageBox {
+                    background-color: #2c2c2c;
+                    color: white;
+                    border-radius: 12px;
+                    border: 1px solid #404040;
+                    padding: 20px;
+                }
+                QMessageBox QLabel {
+                    color: white;
+                    font-size: 14px;
+                    padding: 10px;
+                }
+                QMessageBox QPushButton {
+                    background-color: #3c3c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 8px 20px;
+                    font-size: 14px;
+                    min-width: 80px;
+                    margin: 10px 5px;
+                }
+                QMessageBox QPushButton:hover {
+                    background-color: #4c4c4c;
+                }
+                QPushButton[text="Configure Now"] {
+                    background-color: #2ecc71;
+                }
+                QPushButton[text="Configure Now"]:hover {
+                    background-color: #27ae60;
+                }
+            """
+            )
+
+            # Keep window frame for dragging capability
+            msg.setWindowFlags(
+                Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+            )
+
+            result = msg.exec()
+
+            if msg.clickedButton() == configure_btn:
+                # Open API settings dialog
+                dialog = APISettingsDialog()
+                dialog.exec()
+            else:
+                # Show reminder about functionality
+                Dialogs.show_notification(
+                    "API Configuration",
+                    "Setup Reminder",
+                    "You can configure API settings anytime from Settings > User Settings > Configure API Settings",
+                )
+
+        except Exception as e:
+            print(f"[ERROR] Failed to show API setup guidance: {e}")
 
     def do_capture(self):
         """Execute capture"""
@@ -534,18 +529,18 @@ class IntentionalComputingApp(rumps.App):
             # Get output value and message
             output_raw = float(server_response.get("output", 0))
             output = 1 if output_raw > 0.6 else 0
-            current_message = server_response.get("message", "")
+            # Use 'message' field for user display (fallback to 'reason' for debugging)
+            current_message = server_response.get(
+                "message", server_response.get("reason", "")
+            )
             sentences = re.split(r"(?<=[.!?])\s+", current_message)
             if len(sentences) > 1:
                 current_message = "\n".join(sentences)
 
             # Simple status log
             status = "FOCUSED" if output == 0 else "DISTRACTED"
-            print(f"[{status}] {current_message}")
-
-            # In basic and reminder modes, we only process the response but don't update UI or show notifications
-            if APP_MODE in [APP_MODE_BASIC, APP_MODE_REMINDER]:
-                return
+            print(f"[{status}] Message: {current_message}")
+            print(f"[DEBUG] Reason: {server_response.get('reason', 'N/A')}")
 
             if not current_message:
                 current_message = (
@@ -611,13 +606,12 @@ class IntentionalComputingApp(rumps.App):
                 }
                 self._store_notification_context(notification_id, context_data)
 
-                # Only show feedback buttons in Treatment mode
-                if APP_MODE == APP_MODE_FULL:
-                    self.notifications.show_notification(
-                        "알림",
-                        self.dashboard.current_task,
-                        current_message,
-                        self.current_state,
+                # Show notification with feedback buttons
+                self.notifications.show_notification(
+                    "알림",
+                    self.dashboard.current_task,
+                    current_message,
+                    self.current_state,
                         on_good=lambda nid=notification_id: self._handle_notification_feedback(
                             "good", nid
                         ),
@@ -626,15 +620,6 @@ class IntentionalComputingApp(rumps.App):
                         ),
                         dashboard=self.dashboard,
                         notification_context=context_data,
-                    )
-                else:
-                    # Reminder and Basic modes: no feedback buttons
-                    self.notifications.show_notification(
-                        "알림",
-                        self.dashboard.current_task,
-                        current_message,
-                        self.current_state,
-                        dashboard=self.dashboard,
                     )
                 self.current_message = current_message
             else:
@@ -686,13 +671,12 @@ class IntentionalComputingApp(rumps.App):
                     }
                     self._store_notification_context(notification_id, context_data)
 
-                    # Only show feedback buttons in Treatment mode
-                    if APP_MODE == APP_MODE_FULL:
-                        self.notifications.show_notification(
-                            "알림",
-                            self.dashboard.current_task,
-                            current_message,
-                            self.current_state,
+                    # Show notification with feedback buttons
+                    self.notifications.show_notification(
+                        "알림",
+                        self.dashboard.current_task,
+                        current_message,
+                        self.current_state,
                             on_good=lambda nid=notification_id: self._handle_notification_feedback(
                                 "good", nid
                             ),
@@ -701,15 +685,6 @@ class IntentionalComputingApp(rumps.App):
                             ),
                             dashboard=self.dashboard,
                             notification_context=context_data,
-                        )
-                    else:
-                        # Reminder and Basic modes: no feedback buttons
-                        self.notifications.show_notification(
-                            "알림",
-                            self.dashboard.current_task,
-                            current_message,
-                            self.current_state,
-                            dashboard=self.dashboard,
                         )
                     self.current_message = current_message
 
@@ -742,10 +717,6 @@ class IntentionalComputingApp(rumps.App):
 
     def _handle_focus_reminders(self, output, message):
         """Handle reminder logic for distracted state"""
-        # Skip reminders in basic and reminder modes
-        if APP_MODE in [APP_MODE_BASIC, APP_MODE_REMINDER]:
-            return
-
         # Check for distracted state reminders
         if self.current_state == 1 and output == 1:
             self.consecutive_focus_count += 1
@@ -803,13 +774,12 @@ class IntentionalComputingApp(rumps.App):
                     }
                     self._store_notification_context(notification_id, context_data)
 
-                    # Only show feedback buttons in Treatment mode
-                    if APP_MODE == APP_MODE_FULL:
-                        self.notifications.show_notification(
-                            "알림",
-                            task,
-                            reminder_message,
-                            1,  # Always distracted state for reminders
+                    # Show notification with feedback buttons
+                    self.notifications.show_notification(
+                        "알림",
+                        task,
+                        reminder_message,
+                        1,  # Always distracted state for reminders
                             on_good=lambda nid=notification_id: self._handle_notification_feedback(
                                 "good", nid
                             ),
@@ -818,15 +788,6 @@ class IntentionalComputingApp(rumps.App):
                             ),
                             dashboard=self.dashboard,
                             notification_context=context_data,
-                        )
-                    else:
-                        # Reminder and Basic modes: no feedback buttons
-                        self.notifications.show_notification(
-                            "알림",
-                            task,
-                            reminder_message,
-                            1,  # Always distracted state for reminders
-                            dashboard=self.dashboard,
                         )
                 except Exception as e:
                     print(f"[ERROR] Notification failed: {e}")
@@ -845,11 +806,6 @@ class IntentionalComputingApp(rumps.App):
 
     def play_sound(self):
         """Play notification sound"""
-        # Skip sound only in basic mode
-        if APP_MODE == APP_MODE_BASIC:
-            print("[SOUND] Basic mode: Skipping sound playback")
-            return
-
         try:
             sound_settings = self.config.get_sound_settings()
 
@@ -923,30 +879,11 @@ class IntentionalComputingApp(rumps.App):
         self.analysis_callback = analysis_callback
 
         print("\n=== Starting Auto Capture ===")
-        print(f"Current APP_MODE: {APP_MODE}")
 
         # Start timers
         self.capture_timer.start(CAPTURE_INTERVAL * 1000)
         self.llm_timer.start(LLM_INVOKE_INTERVAL * 1000)
         print("Capture and LLM timers started")
-
-        # Start reminder timer if in reminder mode
-        print(f"\n=== Reminder Timer Status ===")
-        print(f"APP_MODE: {APP_MODE}")
-        print(f"APP_MODE == APP_MODE_REMINDER: {APP_MODE == APP_MODE_REMINDER}")
-        print(f"self.reminder_timer exists: {self.reminder_timer is not None}")
-
-        if APP_MODE == APP_MODE_REMINDER:
-            if self.reminder_timer:
-                print("Starting reminder timer...")
-                self.reminder_timer.start()
-                print("Reminder timer started successfully")
-                print(f"Timer interval: {self.reminder_timer.interval()} ms")
-                print(f"Timer is active: {self.reminder_timer.isActive()}")
-            else:
-                print("ERROR: reminder_timer is None!")
-        else:
-            print("Not in reminder mode, skipping reminder timer")
 
         # Show recording indicator
         self.update_recording_indicator()
@@ -958,109 +895,7 @@ class IntentionalComputingApp(rumps.App):
 
         return bool(re.search(r"[가-힣]", text))
 
-    def _handle_control_group_reminder(self):
-        """Handle reminder notification"""
-        print("\n=== Control Group Reminder Timer Triggered ===")
-        if not self.dashboard.current_task:
-            print("No current task, skipping reminder")
-            return
-
-        # 리마인더 메시지 생성 (언어별 구분) - 시간 정보 제거
-        task = self.dashboard.current_task
-        if self._is_korean_text(task):
-            # 한글이 포함된 경우
-            message = f'당신이 정한 목표는 "{task}" 입니다!'
-        else:
-            # 영어만 있는 경우
-            message = f'Your intention is "{task}"!'
-
-        print(f"Sending Control Group Reminder notification for task: {task}")
-        print(f"Message: {message}")
-
-        # self.play_sound()
-
-        current_raw_value = getattr(
-            self.dashboard, "current_raw_value", 0.5
-        )  # Use existing raw value or neutral default
-        self.dashboard.update_intention_level(0, message, current_raw_value)
-
-        notification_id = f"focus_reminder_{int(time.time() * 1000)}"
-
-        # Set notification flag for next LLM analysis
-        self.next_analysis_has_notification = True
-        if self.manager:
-            self.manager.set_notification_flag(True)
-
-        # Store notification context (use displayed message for accurate feedback)
-        context_data = {
-            "ai_judgement": 0,  # Always focused state for control group reminders
-            "llm_response": getattr(self.dashboard, "displayed_message_response", None)
-            or getattr(self.dashboard, "last_llm_response", None),
-            "image_path": getattr(self.dashboard, "last_analyzed_image", None),
-            "image_id": getattr(self.dashboard, "displayed_message_image_id", None)
-            or getattr(self.dashboard, "last_llm_response_image_id", None),
-            "current_task": task,
-            "message": message,
-            "timestamp": time.time(),
-        }
-        self._store_notification_context(notification_id, context_data)
-
-        # Only show feedback buttons in Treatment mode
-        if APP_MODE == APP_MODE_FULL:
-            self.notifications.show_notification(
-                "알림",
-                task,
-                message,
-                0,  # Always show green for reminder notifications
-                on_good=lambda nid=notification_id: self._handle_notification_feedback(
-                    "good", nid
-                ),
-                on_bad=lambda nid=notification_id: self._handle_notification_feedback(
-                    "bad", nid
-                ),
-                dashboard=self.dashboard,
-                notification_context=context_data,
-            )
-        else:
-            # Reminder and Basic modes: no feedback buttons
-            self.notifications.show_notification(
-                "알림",
-                task,
-                message,
-                0,  # Always show green for reminder notifications
-                dashboard=self.dashboard,
-            )
-
-            # 🔥 CRITICAL: Clean up old notification contexts in Reminder mode
-            # (since no feedback buttons mean _clear_old_notification_contexts is never called)
-            print("[NOTIFICATION] Cleaning up old contexts in Reminder mode...")
-            self._clear_old_notification_contexts()
-
-        print("Control Group Reminder notification sent")
-
-    def _handle_reminder(self):
-        """Handle timer-based reminder"""
-        print("\n=== Reminder Timer Triggered ===")
-        print(f"Current app mode: {APP_MODE}")
-        print("25-minute reminder interval")
-
-        # 🔥 CRITICAL: Proactive memory cleanup before reminder in Reminder mode
-        print("[REMINDER] Performing proactive memory cleanup...")
-
-        # Force cleanup of old notification contexts
-        self._clear_old_notification_contexts()
-
-        # Force garbage collection to free memory
-        import gc
-
-        before_gc = len(gc.get_objects())
-        gc.collect()
-        after_gc = len(gc.get_objects())
-        print(
-            f"[REMINDER] Garbage collection: {before_gc} -> {after_gc} objects ({before_gc - after_gc} freed)"
-        )
-
-        self._handle_control_group_reminder()
+    # Reminder functionality removed (experimental feature)
 
     # _handle_dashboard_sound_request method removed - sound functionality disabled
 
@@ -1182,16 +1017,8 @@ class IntentionalComputingApp(rumps.App):
 
     def _clear_old_notification_contexts(self):
         """Clear old notification contexts to prevent memory leaks"""
-        # 🔥 CRITICAL: Different limits for different modes to prevent memory accumulation
-        if APP_MODE == APP_MODE_REMINDER:
-            # Reminder mode: Keep only last 3 contexts (no feedback needed)
-            limit = 3
-        elif APP_MODE == APP_MODE_BASIC:
-            # Basic mode: Keep only last 5 contexts (minimal feedback)
-            limit = 3
-        else:
-            # Full mode: Keep last 10 contexts (full feedback support)
-            limit = 10
+        # Keep last 10 contexts for feedback support
+        limit = 10
 
         if len(self.notification_context) > limit:
             # Remove oldest contexts
@@ -1200,7 +1027,7 @@ class IntentionalComputingApp(rumps.App):
             for key in sorted_keys[:contexts_to_remove]:
                 del self.notification_context[key]
             print(
-                f"[NOTIFICATION] Cleaned up {contexts_to_remove} old contexts, kept {limit} for {APP_MODE} mode"
+                f"[NOTIFICATION] Cleaned up {contexts_to_remove} old contexts, kept {limit}"
             )
 
     def invoke_llm(self):
@@ -1215,16 +1042,7 @@ class IntentionalComputingApp(rumps.App):
     def _setup_auto_login(self):
         """Setup auto-login after app is fully initialized"""
         try:
-            # Determine app name based on APP_MODE for auto-login registration
-            if APP_MODE == APP_MODE_FULL:
-                app_name = "Purple(new)"
-            elif APP_MODE == APP_MODE_REMINDER:
-                app_name = "Blue(new)"
-            elif APP_MODE == APP_MODE_BASIC:
-                app_name = "Orange(new)"
-            else:
-                app_name = "Intention(new)"
-
+            app_name = "AIM"
             print(f"[INIT] Setting up auto-login for: {app_name}")
             ensure_login_item(app_name)
         except Exception as e:
@@ -1249,20 +1067,6 @@ class IntentionalComputingApp(rumps.App):
         if self.manager:
             print("[APP] Stopping thread manager...")
             self.manager.stop()
-
-        # 🔥 CRITICAL: Clean up reminder timer in Reminder mode to prevent memory leak
-        if hasattr(self, "reminder_timer") and self.reminder_timer:
-            print("[APP] Cleaning up reminder timer...")
-            try:
-                if self.reminder_timer.isActive():
-                    self.reminder_timer.stop()
-                    print("[APP] Reminder timer stopped")
-                self.reminder_timer.timeout.disconnect()
-                self.reminder_timer.deleteLater()
-                self.reminder_timer = None
-                print("[APP] Reminder timer cleaned up successfully")
-            except Exception as e:
-                print(f"[APP] Error cleaning up reminder timer: {e}")
 
         # Additional cleanup: ensure all QThread objects are properly terminated
         print("[APP] Performing final thread cleanup...")

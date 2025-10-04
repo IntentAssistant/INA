@@ -1,52 +1,15 @@
 # App Version - Change this when releasing a new version
 APP_VERSION = "1.0.1"
 
-# App Modes
-APP_MODE_FULL = "treatment"  ## APP1
-APP_MODE_BASIC = "baseline"  ## APP3
-APP_MODE_REMINDER = "control"  ## APP2
-APP_MODE_PRIVATE = "private"
+# API Settings - Direct LLM Integration
+# Configure API keys via the UI (Settings > User Settings > Configure API Settings)
+# Or set environment variables:
+# export OPENAI_API_KEY="your-openai-api-key"
+# export GEMINI_API_KEY="your-gemini-api-key"
 
-# Default App Mode
-APP_MODE = APP_MODE_FULL
-
-# API Settingsd
-CLOUD_STORAGE_ENDPOINT = (
-    # not used
-)
-# Base API endpoints
-LOCAL_BASE_URL = (
-    # enter your endpoint here
-)
-# LOCAL_BASE_URL = "http://0.0.0.0:8080"  # Development
-
-# API endpoints for different services
-LOCAL_MODE_LLM_API_ENDPOINT = f"{LOCAL_BASE_URL}/analyze"  # For image analysis
-LLM_CLARIFICATION_API_ENDPOINT = f"{LOCAL_BASE_URL}/clarification"  # For clarification
-LLM_FEEDBACK_API_ENDPOINT = f"{LOCAL_BASE_URL}/feedback"  # For feedback/reflection
-LLM_FEEDBACK_MESSAGE_API_ENDPOINT = (
-    f"{LOCAL_BASE_URL}/feedback_message"  # For feedback messages
-)
-LLM_RATING_API_ENDPOINT = f"{LOCAL_BASE_URL}/rating"  # For session rating
-
-# Legacy endpoint (for backward compatibility)
-LLM_CHAT_API_ENDPOINT = f"{LOCAL_BASE_URL}/clarification"  # Redirect to clarification
-
-
-# Storage Settings
-DEFAULT_STORAGE_DIR = (
-    "~/ScreenCaptures_Purple(new)"
-    if APP_MODE == APP_MODE_FULL
-    else (
-        "~/ScreenCaptures_Blue(new)"
-        if APP_MODE == APP_MODE_REMINDER
-        else (
-            "~/ScreenCaptures_private(new)"
-            if APP_MODE == APP_MODE_PRIVATE
-            else "~/ScreenCaptures_Orange(new)"
-        )
-    )
-)
+# Storage Settings - Images no longer stored locally
+# Only configuration and session data are stored
+DEFAULT_STORAGE_DIR = "~/AIM_Data"
 CONFIG_DIR = "~/.intention_app"
 USER_CONFIG_FILE = "user_config.json"
 PROMPT_CONFIG_FILE = "prompt_config.json"

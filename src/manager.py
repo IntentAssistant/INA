@@ -12,7 +12,7 @@ from PIL import Image
 
 
 from PyQt6.QtGui import QPainter, QPen, QColor
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QObject, QBuffer, QIODevice
 from PyQt6.QtWidgets import QWidget, QApplication
 
 from .utils.activity import get_frontmost_app, get_browser_url
@@ -25,12 +25,8 @@ from .config.constants import (
     LLM_INVOKE_INTERVAL,
     LLM_ANALYSIS_IMAGE_COUNT,
     MAX_CONCURRENT_ANALYSIS_THREADS,
-    LOCAL_MODE_LLM_API_ENDPOINT,
     DEFAULT_STORAGE_DIR,
     IMAGE_QUALITY,
-    APP_MODE,
-    APP_MODE_BASIC,
-    APP_MODE_REMINDER,
 )
 from .utils.screen_lock_detector import ScreenLockDetector
 
@@ -42,7 +38,6 @@ class ThreadManager(QObject):
     def __init__(
         self,
         storage,
-        uploader,
         prompt_config,
         dashboard,
         user_config,
@@ -50,7 +45,7 @@ class ThreadManager(QObject):
     ):
         super().__init__()
         self.storage = storage if isinstance(storage, LocalStorage) else LocalStorage()
-        self.uploader = uploader
+        self.uploader = None  # Cloud upload removed - using direct LLM APIs
         self.prompt_config = prompt_config
         self.dashboard = dashboard
         self.user_config = user_config
@@ -107,6 +102,10 @@ class ThreadManager(QObject):
         self.is_running = False
         self.skip_llm = False
 
+        # Initialize screenshot data storage (in memory only)
+        self.current_screenshot_data = None
+        self.current_capture_metadata = {}
+
         # Connect timer signals
         self.capture_timer.timeout.connect(self.capture_screen)
         self.llm_timer.timeout.connect(self.do_llm_analysis)
@@ -130,6 +129,14 @@ class ThreadManager(QObject):
             # Skip processing if ThreadManager is no longer running
             if not self.is_running:
                 return
+
+            # Check if result is an error
+            output = result.get("output", 0)
+            if output == "error":
+                print(
+                    f"[ERROR] LLM analysis failed: {result.get('reason', 'Unknown error')}"
+                )
+                return  # Skip processing error results
 
             # store llm response
             self.storage.save_llm_result(result)
@@ -155,11 +162,24 @@ class ThreadManager(QObject):
 
             # process llm response
             if self.analysis_callback:
-                self.analysis_callback(result)
-                self.last_score = 1 if result.get("output", 0) > 0.6 else 0
+                # Handle both numeric and string output
+                try:
+                    output_value = (
+                        float(output)
+                        if isinstance(output, (int, float, str)) and output != "error"
+                        else 0
+                    )
+                    self.last_score = 1 if output_value > 0.6 else 0
+                    self.analysis_callback(result)
+                except (ValueError, TypeError):
+                    print(f"[ERROR] Invalid output value: {output}")
+                    return
 
         except Exception as e:
             print(f"[ERROR] {str(e)}")
+            import traceback
+
+            traceback.print_exc()
 
     def start(self, capture_callback, analysis_callback):
         """Start auto capture and analysis"""
@@ -176,11 +196,9 @@ class ThreadManager(QObject):
         self.previous_app_domain = None
         print(f"[SESSION] App change tracking reset for new session")
 
-        # BASIC mode now sends to server like REMINDER mode (but UI updates are handled in app.py)
-        self.skip_llm = False  # Both BASIC and REMINDER modes send to server
-        print(
-            f"[INFO] {APP_MODE} mode: LLM analysis enabled, UI updates controlled in app.py"
-        )
+        # LLM analysis enabled
+        self.skip_llm = False
+        print("[INFO] LLM analysis enabled")
 
         # Update task directory before starting capture
         if self.dashboard and self.dashboard.current_task:
@@ -328,7 +346,7 @@ class ThreadManager(QObject):
             return False
 
     def capture_screen(self):
-        """Capture the selected display"""
+        """Capture the selected display (no longer saves to disk, keeps in memory)"""
         if not self.is_running:
             return
 
@@ -337,23 +355,6 @@ class ThreadManager(QObject):
             is_locked = self.screen_lock_detector.is_screen_locked()
             if is_locked:
                 print("[CAPTURE] Screen is locked - skipping capture")
-                return
-
-        # Check storage limit before capturing
-        if not self._check_storage_limit(3.0):  # 3GB limit
-            print("[CAPTURE] Storage limit exceeded - cleaning up old files")
-            self._cleanup_old_captures_by_size(
-                2.5
-            )  # Clean up to 2.5GB to avoid frequent cleanups
-
-            # Invalidate cache after cleanup so next check will be fresh
-            self.last_storage_check_time = 0
-
-            # Check again after cleanup
-            if not self._check_storage_limit(3.0):
-                print(
-                    "[CAPTURE] Storage limit still exceeded after cleanup - skipping capture"
-                )
                 return
 
         # Only log once per session or when display changes
@@ -388,51 +389,52 @@ class ThreadManager(QObject):
                     print(f"Selected display {self.selected_display} not found")
                     return
 
-            # Get current frontmost app name
-            frontmost_app = get_frontmost_app()
+            # Convert screenshot to bytes for direct API processing
+            # PyQt6 requires QBuffer instead of BytesIO
+            byte_array = (
+                screenshot.toImage().bits().asstring(screenshot.toImage().sizeInBytes())
+            )
 
-            # Get current URL if app supports it
+            # Use PIL to convert and compress
+            from PIL import Image
+
+            pil_image = Image.frombytes(
+                "RGBA", (screenshot.width(), screenshot.height()), byte_array
+            )
+
+            # Convert to RGB (remove alpha channel)
+            if pil_image.mode == "RGBA":
+                pil_image = pil_image.convert("RGB")
+
+            # Save to BytesIO using PIL
+            buffer = io.BytesIO()
+            pil_image.save(buffer, format="JPEG", quality=IMAGE_QUALITY)
+            self.current_screenshot_data = buffer.getvalue()
+
+            # Get current frontmost app name for metadata
+            frontmost_app = get_frontmost_app()
             url = ""
             if frontmost_app:
                 url = get_browser_url(frontmost_app)
 
-            # Generate filename with timestamp
+            # Store metadata in memory (no file saving)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{timestamp}.jpg"
-            filepath = os.path.join(self.storage.get_capture_dir(), filename)
-
-            # Save screenshot
-            success = screenshot.save(filepath, "JPEG", quality=85)
-
-            # Save metadata
-            capture_dir = self.storage.get_capture_dir()
-            metadata_path = os.path.join(capture_dir, "_metadata.json")
-            entry = {
+            self.current_capture_metadata = {
                 "timestamp": timestamp,
                 "frontmost_app": frontmost_app,
-                "image_file": os.path.basename(filename),
+                "url": url,
+                "image_size": len(self.current_screenshot_data),
             }
-            if url:
-                entry["url"] = url
-            try:
-                if os.path.exists(metadata_path):
-                    with open(metadata_path, "r") as f:
-                        existing = json.load(f)
-                else:
-                    existing = []
 
-                existing.append(entry)
-
-                with open(metadata_path, "w") as f:
-                    json.dump(existing, f, indent=2)
-            except Exception as e:
-                pass  # Silent fail for metadata
+            print(
+                f"[CAPTURE] Screenshot captured in memory ({len(self.current_screenshot_data)} bytes)"
+            )
 
         except Exception as e:
             print(f"[CAPTURE] Error: {e}")
 
     def do_llm_analysis(self):
-        """Perform LLM analysis on recent images"""
+        """Perform LLM analysis on current screenshot (no file system access)"""
         try:
             # Don't analyze if not running
             if not self.is_running:
@@ -469,24 +471,28 @@ class ThreadManager(QObject):
             if len(self.analysis_threads) >= MAX_CONCURRENT_ANALYSIS_THREADS:
                 return  # Skip if too many threads running
 
-            # Get recent images (always 1 image for simplified analysis)
-            images = self._get_recent_local_images(1)
-            if not images:
+            # Check if we have current screenshot data
+            if (
+                not hasattr(self, "current_screenshot_data")
+                or not self.current_screenshot_data
+            ):
+                print("[LLM_ANALYSIS] No current screenshot data available")
                 return
 
-            # Get real-time frontmost app for prompt (more reliable than metadata)
-            current_image_file = (
-                os.path.basename(images[0]) if images else "unknown.jpg"
-            )
-            frontmost_app_for_prompt, app_name, url = self._get_realtime_frontmost_app(
-                current_image_file
-            )
+            # Get current frontmost app info (real-time)
+            frontmost_app = get_frontmost_app()
+            url = get_browser_url(frontmost_app) if frontmost_app else ""
+
+            # Parse app name and URL
+            if " - " in frontmost_app:
+                app_name = frontmost_app.split(" - ")[0]
+                url = frontmost_app.split(" - ", 1)[1]
+            else:
+                app_name = frontmost_app
+                url = url or ""
 
             # Detect app change
             app_changed = self._detect_app_change(app_name, url)
-
-            # Also get metadata-based frontmost app info for user_info (backward compatibility)
-            frontmost_info = self._get_frontmost_app_info(images)
 
             # Get user info and current task
             user_info = self.user_config.get_user_info()
@@ -501,12 +507,13 @@ class ThreadManager(QObject):
             # Reset notification flag after using it
             self.next_analysis_has_notification = False
 
-            # Add frontmost app info (prefer real-time data, fallback to metadata)
-            if frontmost_info:
-                current_frontmost = frontmost_info[0]
-                user_info["frontmost_app"] = current_frontmost
-            else:
-                user_info["frontmost_app"] = frontmost_app_for_prompt
+            # Add frontmost app info
+            frontmost_app_info = {
+                "app_name": app_name,
+                "url": url,
+                "timestamp": self.current_capture_metadata.get("timestamp", ""),
+            }
+            user_info["frontmost_app"] = frontmost_app_info
 
             # Add app change flag
             user_info["app_change"] = app_changed
@@ -535,13 +542,15 @@ class ThreadManager(QObject):
                     "y": 0,
                 }  # Default position if not available
 
-            # Get formatted prompt with frontmost app context (opacity now sent separately as JSON field)
-            prompt = self.get_formatted_prompt(frontmost_app_for_prompt)
+            # Get formatted prompt with frontmost app context
+            prompt = self.get_formatted_prompt(frontmost_app_info)
             if not prompt:
                 return
 
-            # Create and start analysis thread
-            analysis_thread = LLMAnalysisThread(prompt, images, user_info, parent=self)
+            # Create and start analysis thread with image data instead of file paths
+            analysis_thread = LLMAnalysisThread(
+                prompt, self.current_screenshot_data, user_info, parent=self
+            )
             analysis_thread.analysis_complete.connect(self._handle_analysis_result)
             analysis_thread.analysis_error.connect(self._handle_analysis_error)
 
@@ -653,28 +662,11 @@ class ThreadManager(QObject):
             return False
 
     def _get_recent_local_images(self, count):
-        """Get most recent images from local storage"""
-        # Get current task directory instead of root storage directory
-        storage_dir = self.storage.get_capture_dir()
-        if not os.path.exists(storage_dir):
-            return []
-
-        # Look for both PNG and JPG files
-        image_files = glob.glob(os.path.join(storage_dir, "*.png"))
-        image_files.extend(glob.glob(os.path.join(storage_dir, "*.jpg")))
-
-        if not image_files:
-            return []
-
-        image_files.sort(key=os.path.getmtime, reverse=True)
-        selected_files = image_files[:count]
-
-        # Only log once per session to avoid spam
-        if not hasattr(self, "_logged_analysis_info"):
-            print(f"[ANALYSIS] Task directory: {storage_dir}")
-            self._logged_analysis_info = True
-
-        return selected_files
+        """Deprecated: Images are no longer stored locally"""
+        print(
+            "[WARNING] _get_recent_local_images called but images are no longer stored locally"
+        )
+        return []
 
     def _get_realtime_frontmost_app(self, current_image_file=None):
         """Get real-time frontmost app information with proper structure for server"""
@@ -994,9 +986,6 @@ class ThreadManager(QObject):
             print("Manager not running, skipping LLM invocation")
             return
 
-        # All modes (BASIC, REMINDER, FULL) now send to server
-        # UI updates are controlled in app.py based on APP_MODE
-
         try:
             # Get recent images for analysis
             recent_images = self._get_recent_local_images(LLM_ANALYSIS_IMAGE_COUNT)
@@ -1103,7 +1092,7 @@ class ThreadManager(QObject):
             print(f"Thread ID: {thread_id}")
             print(f"Task: {task}")
             print(f"Notification: {has_notification}")
-            print(f"API Endpoint: {LOCAL_MODE_LLM_API_ENDPOINT}")
+            print(f"Using direct LLM API")
         except Exception as e:
             print(f"Error invoking LLM: {str(e)}")
             import traceback
@@ -1191,11 +1180,8 @@ class ThreadManager(QObject):
             self.dashboard.auto_stopped_due_to_inactivity = True
 
             # Call toggle_capture to stop the session
-            # This will automatically trigger rating dialog for FULL/REMINDER modes
-            # and just stop for BASIC mode
-            print(
-                f"[AUTO_STOP] Calling toggle_capture to stop session ({APP_MODE} mode)"
-            )
+            # This will automatically trigger rating dialog
+            print("[AUTO_STOP] Calling toggle_capture to stop session")
             self.dashboard.toggle_capture()
 
         except Exception as e:

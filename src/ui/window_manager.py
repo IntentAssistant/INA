@@ -50,21 +50,12 @@ class WindowManager:
 
     def create_all_windows(self):
         """Create all popup windows"""
-        # Import here to avoid circular import
-        from ..config.constants import APP_MODE, APP_MODE_BASIC, APP_MODE_REMINDER
-
-        # Only create history window for non-BASIC modes
-        if APP_MODE != APP_MODE_BASIC:
-            self.create_history_window()
-
+        self.create_history_window()
         self.create_clarification_window()
         self.create_starting_soon_window()
         self.create_llm_response_window()
         self.create_rating_window()
-
-        # Skip feedback window creation in REMINDER mode
-        if APP_MODE != APP_MODE_REMINDER:
-            self.create_feedback_window()
+        self.create_feedback_window()
 
     def create_history_window(self):
         """Create the history window that appears below the main dashboard"""

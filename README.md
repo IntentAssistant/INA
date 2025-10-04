@@ -163,13 +163,61 @@ python main.py
 
 ## Configuration
 
-In the current version, you need to configure the LLM API endpoint in `src/config/constants.py`:
+### API Keys Setup
 
-```python
-LOCAL_BASE_URL = "your-llm-api-endpoint-here"
+AIM now supports direct LLM API integration! No separate backend server required.
+
+#### In-App Configuration (Recommended)
+
+The easiest way to configure API settings is through the built-in settings interface:
+
+1. **Launch AIM** - If no API keys are configured, you'll see a welcome dialog
+2. **Click "Configure Now"** or access it later via **Settings > User Settings > Configure API Settings**
+3. **Choose your provider** (OpenAI GPT or Google Gemini)
+4. **Enter your API key** and select a model
+5. **Test your configuration** using the built-in validation
+6. **Save settings** - Your configuration is stored securely on your device
+
+#### Environment Variables (Advanced)
+
+You can also use environment variables if preferred:
+
+**OpenAI GPT (Primary)**
+```bash
+export OPENAI_API_KEY="your-openai-api-key-here"
 ```
 
-> **Future Update**: The app will be improved to work with API keys only. You'll be able to directly enter OpenAI/Claude API keys without needing a separate backend server.
+**Google Gemini (Alternative)**
+```bash
+export GEMINI_API_KEY="your-gemini-api-key-here"
+```
+
+**For permanent setup, add to your shell profile:**
+```bash
+# For bash users
+echo 'export OPENAI_API_KEY="your-key"' >> ~/.bashrc
+
+# For zsh users  
+echo 'export OPENAI_API_KEY="your-key"' >> ~/.zshrc
+```
+
+#### Available Models
+
+**OpenAI GPT:**
+- GPT-4o (Latest, Recommended)
+- GPT-4o Mini (Faster, Cheaper)
+- GPT-4 Turbo (Previous)
+
+**Google Gemini:**
+- Gemini 1.5 Pro (Recommended)
+- Gemini 1.5 Flash (Faster)
+- Gemini Pro Vision (Legacy)
+
+#### Get API Keys
+- **OpenAI**: https://platform.openai.com/api-keys
+- **Gemini**: https://ai.google.dev/gemini-api/docs/api-key
+
+> **Note**: The app will use your selected provider, with automatic fallback to any configured provider if the primary one fails.
 
 ## App Modes
 

@@ -6,10 +6,6 @@ from .constants import (
     USER_CONFIG_FILE,
     DEFAULT_FOCUS_SOUND,
     DEFAULT_DISTRACT_SOUND,
-    APP_MODE,
-    APP_MODE_FULL,
-    APP_MODE_BASIC,
-    APP_MODE_REMINDER,
 )
 
 
@@ -130,17 +126,4 @@ class UserConfig:
 
         self.save_settings()
 
-    def get_app_mode(self):
-        """Get current app mode"""
-        return self.get_setting("app_mode", DEFAULT_APP_MODE)
-
-    def set_app_mode(self, mode):
-        """Set app mode
-
-        Args:
-            mode (str): One of APP_MODE_FULL, APP_MODE_BASIC, APP_MODE_REMINDER
-        """
-        if mode not in [APP_MODE_FULL, APP_MODE_BASIC, APP_MODE_REMINDER]:
-            raise ValueError(f"Invalid app mode: {mode}")
-
-        self.set_setting("app_mode", mode)
+    # App mode methods removed (experimental feature deprecated)

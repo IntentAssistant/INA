@@ -8,7 +8,6 @@ import os
 import requests
 from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
-from ..config.constants import LLM_CLARIFICATION_API_ENDPOINT, APP_MODE
 from ..config.language import get_text
 
 # Import LocalStorage to get proper directory paths
@@ -16,6 +15,9 @@ from ..logging.storage import LocalStorage
 
 # Import prompt functions from the new prompts module
 from ..config.prompts import format_clarification_prompt, format_augmentation_prompt
+
+# Import direct LLM client
+from ..utils.direct_llm_client import get_configured_client
 
 
 class ClarificationManager:
@@ -144,7 +146,7 @@ class ClarificationThread(QThread):
         self._is_stopping = False
         # Add timeout for network requests
         self._request_timeout = 30  # 30 seconds for clarification
-        self._session = None
+        self.llm_client = None
 
     def __del__(self):
         """Safe destructor to prevent crash during garbage collection"""
@@ -161,13 +163,9 @@ class ClarificationThread(QThread):
             print(f"[CLARIFICATION_THREAD] Safely quitting thread")
             self._is_stopping = True
 
-            # Close network session first
-            if hasattr(self, "_session") and self._session:
-                try:
-                    self._session.close()
-                    print(f"[CLARIFICATION_THREAD] Session closed")
-                except Exception as e:
-                    print(f"[CLARIFICATION_THREAD] Error closing session: {e}")
+            # Clean up LLM client if any
+            if hasattr(self, "llm_client") and self.llm_client:
+                self.llm_client = None
 
             if self.isRunning():
                 # Try graceful quit first
@@ -192,48 +190,22 @@ class ClarificationThread(QThread):
 
     def run(self):
         try:
-            # Prepare the request data for new backend schema
-            request_data = {
-                "input": self.prompt,
-                "type": "clarification",
-                "session_info": {
-                    "user_id": (
-                        getattr(self.dashboard, "user_config", {})
-                        .get_user_info()
-                        .get("name", "default_user")
-                        if self.dashboard and hasattr(self.dashboard, "user_config")
-                        else "default_user"
-                    ),
-                    "session_id": (
-                        getattr(
-                            self.dashboard,
-                            "current_session_start_time",
-                            "intention_session",
-                        )
-                        if self.dashboard
-                        else "intention_session"
-                    ),
-                    "task_name": (
-                        getattr(self.dashboard, "current_task", "Clarification")
-                        if self.dashboard
-                        else "Clarification"
-                    ),
-                    "intention": (
-                        getattr(self.dashboard, "current_task", "Clarification chat")
-                        if self.dashboard
-                        else "Clarification chat"
-                    ),
-                    "device_name": (
-                        getattr(self.dashboard, "user_config", {})
-                        .get_user_info()
-                        .get("device_name", "mac_os_device")
-                        if self.dashboard and hasattr(self.dashboard, "user_config")
-                        else "mac_os_device"
-                    ),
-                    "app_mode": APP_MODE,
-                },
-                "conversation_history": [],
-            }
+            # Check for thread termination request
+            if self._is_stopping:
+                print("Clarification thread termination requested before starting")
+                return
+
+            # Get configured LLM client
+            try:
+                self.llm_client = get_configured_client()
+                if not self.llm_client:
+                    self.error_occurred.emit(
+                        "No LLM API configured. Please set OPENAI_API_KEY or GEMINI_API_KEY environment variable."
+                    )
+                    return
+            except Exception as e:
+                self.error_occurred.emit(f"Failed to initialize LLM client: {str(e)}")
+                return
 
             # Simple request logging
             if "augment" in self.prompt.lower() or "variation" in self.prompt.lower():
@@ -246,55 +218,63 @@ class ClarificationThread(QThread):
             else:
                 print("[CLARIFICATION] Starting clarification")
 
-            # Create session for better connection control
-            if not self._session:
-                import requests
+            print(f"[CLARIFICATION] Using provider: {self.llm_client.provider.value}")
 
-                self._session = requests.Session()
-
-            # Check termination before network request
+            # Check termination before API request
             if self._is_stopping:
-                print("Clarification thread termination requested before network call")
+                print("Clarification thread termination requested before API call")
                 return
 
-            # Make the API request
-            response = self._session.post(
-                LLM_CLARIFICATION_API_ENDPOINT,
-                json=request_data,
-                headers={"Content-Type": "application/json"},
-                timeout=self._request_timeout,
+            # Prepare context for clarification
+            context = {
+                "user_id": (
+                    getattr(self.dashboard, "user_config", {})
+                    .get_user_info()
+                    .get("name", "default_user")
+                    if self.dashboard and hasattr(self.dashboard, "user_config")
+                    else "default_user"
+                ),
+                "session_id": (
+                    getattr(
+                        self.dashboard,
+                        "current_session_start_time",
+                        "intention_session",
+                    )
+                    if self.dashboard
+                    else "intention_session"
+                ),
+                "task_name": (
+                    getattr(self.dashboard, "current_task", "Clarification")
+                    if self.dashboard
+                    else "Clarification"
+                ),
+                "intention": (
+                    getattr(self.dashboard, "current_task", "Clarification chat")
+                    if self.dashboard
+                    else "Clarification chat"
+                ),
+                "device_name": (
+                    getattr(self.dashboard, "user_config", {})
+                    .get_user_info()
+                    .get("device_name", "mac_os_device")
+                    if self.dashboard and hasattr(self.dashboard, "user_config")
+                    else "mac_os_device"
+                ),
+            }
+
+            # Get clarification question using direct LLM API
+            ai_response = self.llm_client.get_clarification_question(
+                prompt=self.prompt, context=context
             )
 
-            if response.status_code == 200:
-                response_data = response.json()
-                ai_response = response_data.get(
-                    "output", "Sorry, I couldn't generate a response."
-                )
-                print(f"[CLARIFICATION] Response: {ai_response}")
-                self.response_received.emit(ai_response)
-            else:
-                error_msg = f"API request failed with status {response.status_code}"
-                print(f"[CLARIFICATION] Error: {error_msg}")
-                self.error_occurred.emit(error_msg)
+            # Check for thread termination request
+            if self._is_stopping:
+                print("Clarification thread termination requested after API call")
+                return
 
-        except requests.exceptions.Timeout:
-            if not self._is_stopping:
-                error_msg = "Request timed out. Please try again."
-                print(f"[CLARIFICATION] Timeout: {error_msg}")
-                self.error_occurred.emit(error_msg)
-            else:
-                print(
-                    f"[CLARIFICATION_THREAD] Thread stopped, suppressing timeout error"
-                )
-        except requests.exceptions.RequestException as e:
-            if not self._is_stopping:
-                error_msg = f"Network error: {str(e)}"
-                print(f"[CLARIFICATION] Error: {error_msg}")
-                self.error_occurred.emit(error_msg)
-            else:
-                print(
-                    f"[CLARIFICATION_THREAD] Thread stopped, suppressing network error: {str(e)}"
-                )
+            print(f"[CLARIFICATION] Response: {ai_response}")
+            self.response_received.emit(ai_response)
+
         except Exception as e:
             if not self._is_stopping:  # Only emit error signal if not terminating
                 error_msg = f"Unexpected error: {str(e)}"

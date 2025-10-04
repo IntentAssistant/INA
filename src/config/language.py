@@ -22,7 +22,7 @@ class LanguageManager:
         self.translations = {
             "ko": {
                 # App Titles
-                "app_title_1": "Purple",
+                "app_title_1": "INA",
                 "app_title_2": "Blue",
                 "app_title_3": "Orange",
                 "app_title_test": "TEST",
@@ -117,7 +117,7 @@ class LanguageManager:
             },
             "en": {
                 # App Titles
-                "app_title_1": "Purple",
+                "app_title_1": "INA",
                 "app_title_2": "Blue",
                 "app_title_3": "Orange",
                 "app_title_test": "TEST",

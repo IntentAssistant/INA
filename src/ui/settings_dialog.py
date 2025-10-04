@@ -22,6 +22,7 @@ from PyQt6.QtGui import QPainter, QPen, QColor
 import os
 import getpass
 from ..config.language import get_text, set_language, get_current_language
+from .api_settings_dialog import APISettingsDialog
 
 
 class LanguageSettingsDialog(QDialog):
@@ -299,6 +300,38 @@ class UserSettingsDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        # API Settings section
+        api_group = QGroupBox("AI Model Configuration")
+        api_layout = QVBoxLayout(api_group)
+
+        api_description = QLabel(
+            "Configure your AI model providers (OpenAI GPT, Google Gemini)"
+        )
+        api_description.setStyleSheet("color: #999; font-size: 12px;")
+        api_description.setWordWrap(True)
+        api_layout.addWidget(api_description)
+
+        self.api_settings_button = QPushButton("Configure API Settings")
+        self.api_settings_button.clicked.connect(self.open_api_settings)
+        self.api_settings_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+        """
+        )
+        api_layout.addWidget(self.api_settings_button)
+
+        layout.addWidget(api_group)
+
         # Buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -338,6 +371,11 @@ class UserSettingsDialog(QDialog):
             }
             """
         )
+
+    def open_api_settings(self):
+        """Open API settings dialog"""
+        dialog = APISettingsDialog(self)
+        dialog.exec()
 
     def validate_and_accept(self):
         """Validate user input before accepting"""
