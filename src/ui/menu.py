@@ -7,8 +7,8 @@ class AppMenu:
     def create_menu(app):
         # Create Settings submenu
         settings_menu = [
-            rumps.MenuItem(get_text("user_settings")),
-            rumps.MenuItem(get_text("language_settings")),
+            rumps.MenuItem("API Settings"),
+            # Language Settings removed - English only
             # Display Settings removed - single display auto-selection
             # Sound Settings removed - sound functionality disabled
         ]

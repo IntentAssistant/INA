@@ -449,75 +449,13 @@ class IntentionalComputingApp(rumps.App):
         """Execute capture"""
         self.manager.do_activity_capture()
 
-    @rumps.clicked("Settings", "User Settings")
-    def show_user_settings(self, _):
-        """Handle user settings menu click"""
-        from .ui.settings_dialog import UserSettingsDialog
+    @rumps.clicked("Settings", "API Settings")
+    def show_api_settings(self, _):
+        """Handle API settings menu click"""
+        from .ui.unified_settings_dialog import UnifiedSettingsDialog
 
-        dialog = UserSettingsDialog(self.config.get_user_info())
-
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            user_input = dialog.get_user_input()
-            name, password, device = (
-                user_input["name"],
-                user_input["password"],
-                user_input["device"],
-            )
-
-            if name and password and device:
-                self.config.set_user_info(
-                    name=name, password=password, device_name=device
-                )
-                Dialogs.show_notification(
-                    "Settings Updated",
-                    "User credentials have been saved",
-                    f"User ID: {name}\nDevice: {device}",
-                )
-            else:
-                Dialogs.show_notification(
-                    "Settings Error",
-                    "Credentials Required",
-                    "Please enter both User ID and Password.",
-                )
-
-    @rumps.clicked("Settings", "Language Settings")
-    def show_language_settings(self, _):
-        """Handle language settings menu click"""
-        from .ui.settings_dialog import LanguageSettingsDialog
-
-        dialog = LanguageSettingsDialog()
-
-        # Connect language change signal
-        dialog.language_changed.connect(self._on_language_changed)
-
+        dialog = UnifiedSettingsDialog()
         dialog.exec()
-
-    def _on_language_changed(self, new_language):
-        """Handle language change event"""
-        print(f"[LANGUAGE] Language changed to: {new_language}")
-
-        # For rumps, we need to update menu items
-        try:
-            # Clear existing menu items
-            self.menu.clear()
-
-            # Recreate the menu with new language
-            new_menu = AppMenu.create_menu(self)
-
-            # Add new menu items
-            for item in new_menu:
-                if item is None:
-                    # Separator
-                    self.menu.add(rumps.separator)
-                else:
-                    self.menu.add(item)
-
-        except Exception as e:
-            print(f"[LANGUAGE] Error updating menu: {e}")
-
-        # Refresh dashboard UI
-        if hasattr(self, "dashboard") and self.dashboard:
-            self.dashboard.refresh_ui_language()
 
     # Display Settings menu removed - single display auto-selection
 

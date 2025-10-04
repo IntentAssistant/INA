@@ -260,10 +260,9 @@ class UserSettingsDialog(QDialog):
 
     def setup_ui(self, current_settings):
         layout = QVBoxLayout()
-        form_layout = QFormLayout()
 
         # Description label
-        description = QLabel(get_text("user_settings_description"))
+        description = QLabel("Configure your AI model providers (OpenAI GPT, Google Gemini)")
         description.setWordWrap(True)
         description.setStyleSheet(
             """
@@ -277,28 +276,6 @@ class UserSettingsDialog(QDialog):
             """
         )
         layout.addWidget(description)
-
-        # User ID input - no default value, must be entered manually
-        self.name_input = QLineEdit()
-        # Only use existing value if already set, don't auto-populate with system username
-        existing_name = current_settings.get("name", "") if current_settings else ""
-        self.name_input.setText(existing_name)
-        self.name_input.setPlaceholderText(get_text("user_id_placeholder"))
-        form_layout.addRow(get_text("user_id_label"), self.name_input)
-
-        # Password input
-        self.password_input = QLineEdit()
-        existing_password = (
-            current_settings.get("password", "") if current_settings else ""
-        )
-        self.password_input.setText(existing_password)
-        self.password_input.setPlaceholderText(get_text("password_placeholder"))
-        self.password_input.setEchoMode(
-            QLineEdit.EchoMode.Password
-        )  # Hide password characters
-        form_layout.addRow(get_text("password_label"), self.password_input)
-
-        layout.addLayout(form_layout)
 
         # API Settings section
         api_group = QGroupBox("AI Model Configuration")
@@ -336,8 +313,9 @@ class UserSettingsDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        button_box.accepted.connect(self.validate_and_accept)
+        button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
         layout.addWidget(button_box)
 
         self.setLayout(layout)
@@ -377,35 +355,9 @@ class UserSettingsDialog(QDialog):
         dialog = APISettingsDialog(self)
         dialog.exec()
 
-    def validate_and_accept(self):
-        """Validate user input before accepting"""
-        name = self.name_input.text().strip()
-        password = self.password_input.text().strip()
-
-        if not name:
-            from ..ui.dialogs import Dialogs
-
-            Dialogs.show_error(
-                get_text("user_id_required"), get_text("user_id_required_message")
-            )
-            return
-
-        if not password:
-            from ..ui.dialogs import Dialogs
-
-            Dialogs.show_error(
-                get_text("password_required"), get_text("password_required_message")
-            )
-            return
-
-        self.accept()
-
     def get_user_input(self):
-        return {
-            "name": self.name_input.text().strip(),  # This stores the User ID
-            "password": self.password_input.text().strip(),  # This stores the password
-            "device": "mac_os_device",  # Default device name
-        }
+        """Return empty dict as user credentials are no longer needed"""
+        return {}
 
 
 class PromptSettingsDialog(QDialog):

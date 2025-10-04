@@ -679,7 +679,7 @@ class Dashboard(QWidget):
         self.settings_button = QPushButton("⚙")
         self.settings_button.setObjectName("settingsButton")
         self.settings_button.setFixedSize(QUIT_BUTTON_SIZE, QUIT_BUTTON_SIZE)
-        self.settings_button.clicked.connect(self.show_settings_menu)
+        self.settings_button.clicked.connect(self.open_api_settings)
 
         # Quit button (right aligned)
         self.quit_button = QPushButton("✕")
@@ -701,9 +701,7 @@ class Dashboard(QWidget):
             title_center_container, 1
         )  # stretch=1 to occupy remaining space
         title_bar_layout.setContentsMargins(12, 6, 0, 6)
-        title_bar_layout.addWidget(
-            buttons_container, 0, Qt.AlignmentFlag.AlignRight
-        )
+        title_bar_layout.addWidget(buttons_container, 0, Qt.AlignmentFlag.AlignRight)
 
         # Insert the title bar at the top of the main layout
         layout.insertWidget(0, title_bar)
@@ -775,9 +773,7 @@ class Dashboard(QWidget):
         self.task_display.mousePressEvent = self.task_display_clicked
 
         # Start/Stop button
-        self.start_button = QPushButton(
-            get_text("start_button")
-        )  # Start/stop button
+        self.start_button = QPushButton(get_text("start_button"))  # Start/stop button
         self.start_button.setObjectName("startButton")
         self.start_button.setCheckable(True)
         self.start_button.clicked.connect(self.toggle_capture)
@@ -1323,44 +1319,32 @@ class Dashboard(QWidget):
                 # Force clear feedback processing flag
                 self.is_processing_feedback = False
 
-            # Stop recording - hide starting soon window and LLM response window, show rating window first
+            # Stop recording - hide all windows and return to initial state
             self.hide_starting_soon_window()
             self.hide_llm_response_window()
+            self.hide_feedback_window()
 
             # Clear context data from thread manager when stopping
             self.thread_manager.clear_clarification_data()
             self.thread_manager.clear_reflection_data()
             self.thread_manager.clear_reflection_rule()
 
-            # End intention session (skip history tracking for BASIC mode)
+            # End intention session
             print("[DEBUG] MANUAL SESSION TERMINATION: User clicked stop button")
-            # DON'T end session here - keep it active for rating
-            # Session will be ended in set_rating() after rating is provided
-            # if APP_MODE != APP_MODE_BASIC:
-            #     self.end_intention_session()
+            self.end_intention_session()
 
-            # DON'T clear session start time yet - need it for rating
-            # self.current_session_start_time will be cleared in on_rating_complete
-            print(
-                f"[DEBUG] Session stopping, keeping session active for rating: {self.current_session_start_time}"
-            )
+            # Clear session start time
+            self.current_session_start_time = None
+            print("[DEBUG] Session ended, session start time cleared")
 
-            # Show rating window directly without switching to input state
-            QTimer.singleShot(
-                100, self.show_rating_window
-            )  # Small delay to ensure proper state
-
-            # Change button text and state after rating window is shown
+            # Change button text and state
             self.is_capturing = False
             self.capture_stopped.emit()
+            self.start_button.setText(get_text("start_button"))
+            self.start_button.setChecked(False)
 
-            # Reset message with "waiting" state
-            self.message_label.setProperty("status", "waiting")
-            self.message_label.setText(CLICK_MESSAGE)
-            self.task_display.setReadOnly(False)
-            self.task_display.setStyleSheet("color: white;")
-            self.message_label.style().unpolish(self.message_label)
-            self.message_label.style().polish(self.message_label)
+            # Return to initial state (input state)
+            self.show_input_state()
 
         # Always update the checked state of the button
         # self.start_button.setChecked(self.is_capturing)  # Moved to on_rating_complete
@@ -1583,13 +1567,10 @@ class Dashboard(QWidget):
         )
 
         # Add menu items
-        user_settings_action = menu.addAction(get_text("user_settings"))
-        user_settings_action.triggered.connect(self.open_user_settings)
+        api_settings_action = menu.addAction("API Settings")
+        api_settings_action.triggered.connect(self.open_api_settings)
 
-        # Add language settings
-        language_settings_action = menu.addAction(get_text("language_settings"))
-        language_settings_action.triggered.connect(self.open_language_settings)
-
+        # Language Settings removed - English only
         # Sound Settings removed - sound functionality disabled
         # Display Settings removed - single display auto-selection
 
@@ -1599,8 +1580,15 @@ class Dashboard(QWidget):
         )
         menu.exec(button_pos)
 
+    def open_api_settings(self):
+        """Open unified settings dialog"""
+        from .unified_settings_dialog import UnifiedSettingsDialog
+
+        dialog = UnifiedSettingsDialog(self)
+        dialog.exec()
+
     def open_user_settings(self):
-        """Open user settings dialog"""
+        """Deprecated: Redirect to API settings"""
         try:
             from ..ui.settings_dialog import UserSettingsDialog
             from PyQt6.QtWidgets import QDialog
@@ -3329,33 +3317,34 @@ class Dashboard(QWidget):
             print("[FOCUS DEBUG] Popup not shown - already visible")
             return
 
-        # Show popup to remind user about intention setting
-        print("[FOCUS DEBUG] Creating reminder popup - user switched away from app")
-        self.focus_popup = SetIntentionReminderPopup()
+        # Only show popup if user has set an intention
+        if not self.current_task or not self.current_task.strip():
+            print("[FOCUS DEBUG] Popup not shown - no intention set")
+            return
+
+        # Show popup to remind user about intention
+        print("[FOCUS DEBUG] Creating focus reminder popup - user switched away from app")
+        self.focus_popup = FocusReminderPopup(self.current_task)
+        self.focus_popup.return_clicked.connect(self._on_focus_popup_return)
 
         self.focus_popup.show()
         # Don't apply opacity to focus popup - keep it fully visible for important alerts
         # self.apply_current_opacity_to_window(self.focus_popup)
 
-        # Only show notification if user has set an intention
-        if self.current_task and self.current_task.strip():
-            from ..ui.notification import NotificationManager
+        # Show notification
+        from ..ui.notification import NotificationManager
 
-            NotificationManager.show_notification(
-                title=get_text("focus_notification_title"),
-                subtitle=get_text("focus_notification_subtitle"),
-                message=get_text("focus_notification_message"),
-                state=1,  # Use distracted state for focus reminder
-                dashboard=self,
-                notification_context=None,  # No context for focus reminders
-            )
-            print(
-                f"[FOCUS] ✅ POPUP + NOTIFICATION shown - intention: {self.current_task}"
-            )
-        else:
-            print(
-                f"[FOCUS] ✅ POPUP ONLY shown - no intention set, skipping notification"
-            )
+        NotificationManager.show_notification(
+            title=get_text("focus_notification_title"),
+            subtitle=get_text("focus_notification_subtitle"),
+            message=get_text("focus_notification_message"),
+            state=1,  # Use distracted state for focus reminder
+            dashboard=self,
+            notification_context=None,  # No context for focus reminders
+        )
+        print(
+            f"[FOCUS] ✅ POPUP + NOTIFICATION shown - intention: {self.current_task}"
+        )
 
     def _on_focus_popup_return(self):
         """Handle return button click from focus popup"""

@@ -12,10 +12,10 @@ class LanguageManager:
     """Manages language settings and translations"""
 
     def __init__(self):
-        self.current_language = "ko"  # Default to Korean
+        self.current_language = "en"  # Fixed to English only
         self.translations = {}
         self.load_translations()
-        self.load_language_setting()
+        # Language setting removed - always use English
 
     def load_translations(self):
         """Load all translation files"""
