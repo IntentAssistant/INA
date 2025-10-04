@@ -87,7 +87,9 @@ class FeedbackMessageThread(QThread):
                 return
 
             # Backend messaging removed - feedback saved locally only
-            print(f"[FEEDBACK_MESSAGE] Feedback message saved locally (backend removed)")
+            print(
+                f"[FEEDBACK_MESSAGE] Feedback message saved locally (backend removed)"
+            )
             result = {"status": "success", "message": "Feedback saved locally"}
             self.message_sent.emit(result)
 
@@ -198,19 +200,59 @@ class ReflectionThread(QThread):
             user_id = "local_user"
             device_name = "mac_os_device"
 
-            # Process image if available
+            # Get the specific image from RAM cache by image_id (only 1 image for feedback)
             encoded_images = []
-            if self.image_path and os.path.exists(self.image_path):
-                try:
-                    with open(self.image_path, "rb") as img_file:
+            pil_images = []
+            target_image = None
+
+            if self.dashboard and hasattr(self.dashboard, "thread_manager"):
+                thread_manager = self.dashboard.thread_manager
+                if (
+                    hasattr(thread_manager, "image_cache")
+                    and len(thread_manager.image_cache) > 0
+                ):
+                    print(
+                        f"[REFLECTION] Searching for image_id '{self.image_id}' in cache ({len(thread_manager.image_cache)} images)"
+                    )
+
+                    # Find the specific image by image_id
+                    for cached_item in thread_manager.image_cache:
+                        cached_image_id = cached_item.get("image_id")
+                        if cached_image_id == self.image_id:
+                            target_image = cached_item
+                            print(
+                                f"[REFLECTION] Found target image with ID: {self.image_id}"
+                            )
+                            break
+
+                    if target_image:
                         import base64
 
-                        encoded_image = base64.b64encode(img_file.read()).decode(
-                            "utf-8"
+                        try:
+                            # Get image data from cache
+                            image_data = target_image.get("image_data")
+                            pil_image = target_image.get("pil_image")
+
+                            if image_data:
+                                encoded_image = base64.b64encode(image_data).decode(
+                                    "utf-8"
+                                )
+                                encoded_images.append(encoded_image)
+                            if pil_image:
+                                pil_images.append(pil_image)
+                            print(
+                                f"[REFLECTION] Loaded 1 image for feedback reflection"
+                            )
+                        except Exception as e:
+                            print(f"[ERROR] Processing cached image failed: {e}")
+                    else:
+                        print(
+                            f"[REFLECTION] Image with ID '{self.image_id}' not found in cache"
                         )
-                        encoded_images.append(encoded_image)
-                except Exception as e:
-                    print(f"[ERROR] Image processing failed: {e}")
+                else:
+                    print("[REFLECTION] No images in cache")
+            else:
+                print("[REFLECTION] Dashboard or thread_manager not available")
 
             # Prepare session_info for FeedbackRequest
             session_info = {
@@ -246,31 +288,71 @@ class ReflectionThread(QThread):
                 print("Reflection thread termination requested before network call")
                 return
 
-            # Use direct LLM API instead of backend
+            # Use direct LLM API with cached images
             from ..utils.direct_llm_client import get_configured_client
-            
+
             llm_client = get_configured_client()
             if not llm_client:
                 raise Exception("No LLM client configured")
-            
-            # For now, create a simple reflection response
-            # TODO: Implement proper LLM-based reflection
-            print("[REFLECTION] Generating reflection (simplified version)")
-            result = {
-                "reflection": {
-                    "image_description": "User activity captured",
-                    "reflected_implicit_intention": "Based on feedback, adjusting understanding"
-                },
-                "parsed_reflection": {
-                    "image_description": "User activity captured",
-                    "reflected_implicit_intention": "Based on feedback, adjusting understanding"
+
+            # Generate reflection using LLM with the specific feedback image
+            print(
+                f"[REFLECTION] Generating reflection using {len(pil_images)} image (feedback target)"
+            )
+
+            try:
+                # Call LLM for reflection analysis with the single feedback image
+                if pil_images and len(pil_images) > 0:
+                    # Use the LLM client to analyze images with the reflection prompt
+                    # For Gemini, we can send multiple images
+                    reflection_text = llm_client.analyze_reflection(
+                        prompt=self.prompt, images=pil_images, task=current_task
+                    )
+
+                    result = {
+                        "reflection": {
+                            "image_description": reflection_text,
+                            "reflected_implicit_intention": reflection_text,
+                        },
+                        "parsed_reflection": {
+                            "image_description": reflection_text,
+                            "reflected_implicit_intention": reflection_text,
+                        },
+                    }
+                else:
+                    # No images available, create simple response
+                    print("[REFLECTION] No images available for analysis")
+                    result = {
+                        "reflection": {
+                            "image_description": "No images available",
+                            "reflected_implicit_intention": "Based on feedback, adjusting understanding",
+                        },
+                        "parsed_reflection": {
+                            "image_description": "No images available",
+                            "reflected_implicit_intention": "Based on feedback, adjusting understanding",
+                        },
+                    }
+
+                # Emit reflection complete
+                self.reflection_complete.emit(result)
+                return  # Early return to skip old backend code
+
+            except Exception as e:
+                print(f"[REFLECTION] Error generating reflection: {e}")
+                # Fallback to simple response
+                result = {
+                    "reflection": {
+                        "image_description": "Error during analysis",
+                        "reflected_implicit_intention": "Based on feedback, adjusting understanding",
+                    },
+                    "parsed_reflection": {
+                        "image_description": "Error during analysis",
+                        "reflected_implicit_intention": "Based on feedback, adjusting understanding",
+                    },
                 }
-            }
-            
-            # Emit reflection complete
-            self.reflection_complete.emit(result)
-            return  # Early return to skip old backend code
-            
+                self.reflection_complete.emit(result)
+                return
+
             # Old backend response parsing code (kept for reference)
             if False:  # Disabled
                 reflection_found = False
@@ -366,9 +448,7 @@ class FeedbackManager(QObject):
     feedback_processed = pyqtSignal(dict)
     message_sent = pyqtSignal(dict)  # Signal for feedback message sent
 
-    def __init__(
-        self, prompt_config, storage, dashboard=None, parent=None
-    ):
+    def __init__(self, prompt_config, storage, dashboard=None, parent=None):
         super().__init__(parent)
         self.prompt_config = prompt_config
         self.storage = storage

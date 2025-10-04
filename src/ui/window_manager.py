@@ -525,72 +525,7 @@ class WindowManager:
 
         feedback_layout.addWidget(buttons_container)
 
-        # Text input area (initially hidden)
-        text_input_container = QWidget()
-        text_input_container.setObjectName("textInputContainer")
-        text_input_layout = QVBoxLayout(text_input_container)
-        text_input_layout.setContentsMargins(0, 8, 0, 0)
-        text_input_layout.setSpacing(8)
-
-        # Question for text input
-        text_question_label = QLabel("왜 그렇게 생각하셨나요?")
-        text_question_label.setObjectName("textQuestionLabel")
-        text_question_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        text_input_layout.addWidget(text_question_label)
-
-        # Text input field
-        text_input_field = QTextEdit()
-        text_input_field.setObjectName("textInputField")
-        text_input_field.setFixedHeight(60)
-        text_input_field.setPlaceholderText("(선택) 이유를 입력해 주세요...")
-
-        # Handle Enter key to complete IME composition before submission
-        def handle_key_press(event):
-            if event.key() == Qt.Key.Key_Return and not event.modifiers():
-                # Enter without modifiers - submit feedback
-                # First complete any pending IME composition
-                text_input_field.clearFocus()
-                QTimer.singleShot(
-                    50,
-                    lambda: self.dashboard.handle_text_feedback_submit(
-                        text_input_field.toPlainText()
-                    ),
-                )
-                event.accept()
-            else:
-                # Let QTextEdit handle other key events normally
-                QTextEdit.keyPressEvent(text_input_field, event)
-
-        text_input_field.keyPressEvent = handle_key_press
-        text_input_layout.addWidget(text_input_field)
-
-        # Text input buttons
-        text_buttons_container = QWidget()
-        text_buttons_layout = QHBoxLayout(text_buttons_container)
-        text_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        text_buttons_layout.setSpacing(8)
-
-        # Center the submit button
-        text_buttons_layout.addStretch()
-
-        # Submit button (centered)
-        submit_button = QPushButton("제출하기")
-        submit_button.setObjectName("submitButton")
-        submit_button.setFixedSize(90, 30)
-        submit_button.clicked.connect(
-            lambda: self.dashboard.handle_text_feedback_submit(
-                text_input_field.toPlainText()
-            )
-        )
-        text_buttons_layout.addWidget(submit_button)
-
-        text_buttons_layout.addStretch()
-
-        text_input_layout.addWidget(text_buttons_container)
-        feedback_layout.addWidget(text_input_container)
-
-        # Hide text input area initially
-        text_input_container.hide()
+        # Text input feature removed - feedback is now Good/Bad only
 
         # Mouse events for showing/hiding feedback window
         feedback_container.enterEvent = (
@@ -680,8 +615,7 @@ class WindowManager:
         self.dashboard.feedback_window = feedback_window
         self.dashboard.good_feedback_button = good_button
         self.dashboard.bad_feedback_button = bad_button
-        self.dashboard.text_input_container = text_input_container
-        self.dashboard.text_input_field = text_input_field
+        # Text input references removed
 
         # Drag functionality removed - only dashboard should be draggable
 

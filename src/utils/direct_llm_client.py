@@ -333,6 +333,107 @@ class DirectLLMClient:
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}")
 
+    def analyze_reflection(
+        self, prompt: str, images: List[Image.Image], task: str
+    ) -> str:
+        """
+        Analyze multiple images for reflection/feedback using LLM
+
+        Args:
+            prompt: Reflection prompt text
+            images: List of PIL Image objects from cache
+            task: Current task name
+
+        Returns:
+            str: Reflection analysis text
+        """
+        try:
+            if self.provider == LLMProvider.GEMINI:
+                return self._analyze_reflection_gemini(prompt, images, task)
+            elif self.provider == LLMProvider.OPENAI:
+                return self._analyze_reflection_openai(prompt, images, task)
+            else:
+                raise ValueError(f"Unsupported provider: {self.provider}")
+        except Exception as e:
+            print(f"[ERROR] Reflection analysis failed: {e}")
+            return f"Reflection analysis error: {str(e)}"
+
+    def _analyze_reflection_gemini(
+        self, prompt: str, images: List[Image.Image], task: str
+    ) -> str:
+        """Analyze reflection using Gemini with multiple images"""
+        try:
+            # Gemini supports multiple images in a single request
+            content_parts = [prompt]
+
+            # Add up to 10 images (cache limit)
+            for img in images[:10]:
+                content_parts.append(img)
+
+            response = self.gemini_model.generate_content(
+                content_parts, generation_config=self.generation_config
+            )
+
+            if not response.text:
+                raise Exception("Empty response from Gemini")
+
+            return response.text.strip()
+
+        except Exception as e:
+            raise Exception(f"Gemini reflection error: {str(e)}")
+
+    def _analyze_reflection_openai(
+        self, prompt: str, images: List[Image.Image], task: str
+    ) -> str:
+        """Analyze reflection using OpenAI GPT-4 Vision with multiple images"""
+        try:
+            # OpenAI GPT-4 Vision supports multiple images
+            content_parts = [{"type": "text", "text": prompt}]
+
+            # Add up to 10 images (cache limit)
+            for img in images[:10]:
+                # Convert PIL image to base64
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=85)
+                img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+                content_parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"},
+                    }
+                )
+
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "model": self.config["model"],
+                "messages": [{"role": "user", "content": content_parts}],
+                "max_tokens": self.config["max_tokens"],
+                "temperature": self.config["temperature"],
+            }
+
+            response = requests.post(
+                f"{self.config['base_url']}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=60,  # Longer timeout for multiple images
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
+            else:
+                raise Exception(
+                    f"OpenAI API error: {response.status_code} - {response.text}"
+                )
+
+        except Exception as e:
+            raise Exception(f"OpenAI reflection error: {str(e)}")
+
 
 def get_configured_client() -> Optional[DirectLLMClient]:
     """Get a configured LLM client using the active provider from settings"""

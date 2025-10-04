@@ -1590,10 +1590,7 @@ class Dashboard(QWidget):
             # Even if not processing, still clean up UI states
             try:
                 self.reset_feedback_buttons()
-                if hasattr(self, "text_input_container"):
-                    self.text_input_container.hide()
-                if hasattr(self, "shrink_feedback_window"):
-                    self.shrink_feedback_window()
+                # Text input removed - no need to hide container
                 if hasattr(self, "selected_feedback_type"):
                     self.selected_feedback_type = None
                 print("[DEBUG] Feedback UI states cleaned up")
@@ -1648,15 +1645,9 @@ class Dashboard(QWidget):
         # Simple visual feedback - change button border
         self.highlight_feedback_button(button, feedback_type)
 
-        # Show text input area and expand window
-        if hasattr(self, "text_input_container"):
-            self.text_input_container.show()
-            # Expand feedback window to accommodate text input
-            self.expand_feedback_window()
-            # Clear previous text and focus on input field
-            if hasattr(self, "text_input_field"):
-                self.text_input_field.clear()
-                self.text_input_field.setFocus()
+        # Process feedback immediately (text input feature removed)
+        print(f"[FEEDBACK] Processing {feedback_type} feedback immediately")
+        self._process_feedback_submission(feedback_type)
 
     def expand_feedback_window(self):
         """Expand feedback window to accommodate text input"""
@@ -1701,58 +1692,11 @@ class Dashboard(QWidget):
         """
         )
 
-    def handle_text_feedback_submit(self, user_text):
-        """Handle submit button click with user text"""
-        # Force focus away from text input to complete any pending IME composition (Korean input)
-        if hasattr(self, "text_input_field"):
-            self.text_input_field.clearFocus()
-            # Use QTimer to ensure IME composition is fully processed before getting text
-            QTimer.singleShot(50, lambda: self._process_feedback_text())
-        else:
-            self._process_feedback_text(user_text)
+    def _process_feedback_submission(self, feedback_type):
+        """Process feedback submission immediately (text input removed)"""
+        print(f"[FEEDBACK] Processing {feedback_type} feedback")
 
-    def _process_feedback_text(self, fallback_text=None):
-        """Process feedback text after ensuring IME composition is complete"""
-        # Get the final text after IME composition is complete
-        if hasattr(self, "text_input_field"):
-            user_text = self.text_input_field.toPlainText()
-        else:
-            user_text = fallback_text or ""
-
-        print(f"[FEEDBACK] User submitted text: '{user_text}'")
-
-        # Check if text is empty - treat as skip
-        if not user_text.strip():
-            print("[FEEDBACK] Empty text, treating as skip - no API calls")
-            # Hide text input area and shrink window
-            if hasattr(self, "text_input_container"):
-                self.text_input_container.hide()
-                self.shrink_feedback_window()
-
-            # Reset button styles
-            self.reset_feedback_buttons()
-
-            # Hide feedback window
-            QTimer.singleShot(500, self.hide_feedback_window)
-
-            # Stop timeout timer since feedback is completed
-            if (
-                hasattr(self, "feedback_timeout_timer")
-                and self.feedback_timeout_timer.isActive()
-            ):
-                self.feedback_timeout_timer.stop()
-                print("[DEBUG] Feedback submitted - timeout timer stopped")
-
-            # Reset processing flag
-            self.is_processing_feedback = False
-            return
-
-        # Send feedback message to /feedback_message endpoint (only if text is not empty)
-        self.feedback_manager.send_feedback_message(user_text.strip())
-
-        # Get feedback type and AI judgment for reflection processing
-        feedback_type = getattr(self, "selected_feedback_type", "good")
-
+        # Get AI judgment for reflection processing
         if hasattr(self, "last_ai_judgement"):
             ai_judgement_text = (
                 "distracted" if self.last_ai_judgement == 1 else "focused"
@@ -1802,13 +1746,8 @@ class Dashboard(QWidget):
             ai_judgement=ai_judgement_text,
             feedback_type=feedback_type,
             image_id=feedback_image_id,  # Use displayed message ID
-            user_text=user_text,  # Add user text
+            user_text="",  # Text input removed
         )
-
-        # Hide text input area and shrink window
-        if hasattr(self, "text_input_container"):
-            self.text_input_container.hide()
-            self.shrink_feedback_window()
 
         # Reset button styles
         self.reset_feedback_buttons()
@@ -1882,24 +1821,14 @@ class Dashboard(QWidget):
             # 4. Reset button styles to default
             self.reset_feedback_buttons()
 
-            # 5. Hide text input area and shrink feedback window
-            if hasattr(self, "text_input_container"):
-                self.text_input_container.hide()
-                print("[DEBUG] Text input container hidden")
-
-            if hasattr(self, "shrink_feedback_window"):
-                self.shrink_feedback_window()
-                print("[DEBUG] Feedback window shrunk to default size")
+            # 5. Text input feature removed - no need to hide/shrink
 
             # 6. Clear selected feedback type
             if hasattr(self, "selected_feedback_type"):
                 self.selected_feedback_type = None
                 print("[DEBUG] Selected feedback type cleared")
 
-            # 7. Clear text input field
-            if hasattr(self, "text_input_field"):
-                self.text_input_field.clear()
-                print("[DEBUG] Text input field cleared")
+            # 7. Text input feature removed - no field to clear
 
             # 8. Hide feedback window completely
             if (

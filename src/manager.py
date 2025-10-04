@@ -416,13 +416,34 @@ class ThreadManager(QObject):
                 url = get_browser_url(frontmost_app)
 
             # Store metadata in memory (no file saving)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime(
+                "%Y%m%d_%H%M%S_%f"
+            )  # Include microseconds for uniqueness
+            image_id = f"img_{timestamp}"  # Generate unique image_id for feedback
+
             self.current_capture_metadata = {
                 "timestamp": timestamp,
+                "image_id": image_id,
                 "frontmost_app": frontmost_app,
                 "url": url,
                 "image_size": len(self.current_screenshot_data),
             }
+
+            self.last_response_image_id = image_id  # Store for feedback reference
+
+            # Add to image cache for feedback (keep last 10 images)
+            self.image_cache.append(
+                {
+                    "image_id": image_id,
+                    "image_data": self.current_screenshot_data,
+                    "pil_image": pil_image.copy(),  # Keep PIL image for easier processing
+                    "metadata": self.current_capture_metadata.copy(),
+                    "task": self.dashboard.current_task if self.dashboard else None,
+                }
+            )
+            print(
+                f"[CACHE] Image added to cache with ID: {image_id} (total: {len(self.image_cache)}/10)"
+            )
 
             print(
                 f"[CAPTURE] Screenshot captured in memory ({len(self.current_screenshot_data)} bytes)"
