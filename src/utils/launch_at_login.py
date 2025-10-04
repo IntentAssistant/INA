@@ -25,10 +25,10 @@ def ensure_login_item(app_name="Intention(new)"):
         while not bundle_path.endswith(".app") and bundle_path != "/":
             bundle_path = os.path.dirname(bundle_path)
 
-        # .app 번들을 찾지 못한 경우 (개발 모드)
+        # .app 번들을 찾지 못한 경우 (Python으로 직접 실행 시)
         if not bundle_path.endswith(".app"):
             print(
-                "[LOGIN] Development mode detected - skipping login item registration"
+                "[LOGIN] Running from Python directly - skipping login item registration"
             )
             return
 

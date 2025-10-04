@@ -550,9 +550,8 @@ class Dashboard(QWidget):
 
         print("[DASHBOARD] Ready")
 
-        # Start focus monitoring immediately when dashboard is ready
-        # This will monitor app switches regardless of whether intention is set
-        self._start_basic_focus_monitoring()
+        # Focus monitoring will start only when user clicks Start button
+        print("[FOCUS] Focus monitoring disabled - will start when user clicks Start")
 
     def _start_basic_focus_monitoring(self):
         """Start basic focus monitoring without requiring an intention"""
@@ -3360,24 +3359,23 @@ class Dashboard(QWidget):
         print("[FOCUS] User clicked return to work - state reset for new detection")
 
     def start_focus_monitoring(self):
-        """Start monitoring app focus when user has set an intention"""
+        """Start monitoring app focus when user clicks Start button"""
         if self.current_task:
             print(
-                f"[FOCUS] Intention set: '{self.current_task}' - popup notifications enabled"
+                f"[FOCUS] Starting focus monitoring for task: '{self.current_task}'"
             )
-
-            # If basic monitoring is already running, just log that intention is now set
-            if self.focus_monitoring_enabled:
-                print(
-                    "[FOCUS] Basic monitoring already active - now with intention-based popup"
-                )
-                return
-
-            # If basic monitoring is not running for some reason, start it
-            print(f"[FOCUS] Starting focus monitoring for task: '{self.current_task}'")
             print(
                 f"[FOCUS] Check interval: {self.FOCUS_CHECK_INTERVAL/1000}s, Notification delay: {self.NOTIFICATION_DELAY/1000}s"
             )
+            
+            # Get and cache current app name for focus monitoring
+            if self.current_intention_app_name is None:
+                from ..utils.activity import get_current_app_name
+                self.current_intention_app_name = get_current_app_name()
+                print(
+                    f"[FOCUS] Cached intention app name: '{self.current_intention_app_name}'"
+                )
+            
             self.focus_monitoring_enabled = True
             from ..utils.activity import get_frontmost_app
 
@@ -3386,7 +3384,7 @@ class Dashboard(QWidget):
             self.focus_check_timer.start(self.FOCUS_CHECK_INTERVAL)
             print("[FOCUS] Monitoring timer started")
         else:
-            print("[FOCUS] Cannot enable popup notifications - no current task set")
+            print("[FOCUS] Cannot start monitoring - no current task set")
 
     def stop_focus_monitoring(self):
         """Stop monitoring app focus"""

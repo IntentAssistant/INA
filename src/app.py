@@ -321,16 +321,9 @@ class IntentionalComputingApp(rumps.App):
             # Ensure storage directories exist
             self.storage.setup_storage_directory()
 
-            # Check user configuration
-            user_info = self.config.get_user_info()
-            has_user_config = user_info.get("name") and user_info.get("device_name")
-
-            if not has_user_config:
-                print("[INIT] User configuration incomplete - will prompt for setup")
-            else:
-                print(f"[INIT] User configuration found: {user_info.get('name')}")
-
-            return has_user_config
+            # User configuration no longer needed - direct local usage only
+            print("[INIT] Running in local mode - no user configuration needed")
+            return True
 
         except Exception as e:
             print(f"[ERROR] Initial setup check failed: {e}")

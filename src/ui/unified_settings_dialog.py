@@ -407,19 +407,20 @@ class UnifiedSettingsDialog(QDialog):
             QMessageBox.warning(self, "Error", "Please enter an API key")
             return
 
-        api_manager = get_api_config_manager()
-        success = api_manager.set_api_config(provider, api_key, model)
+        if not model:
+            QMessageBox.warning(self, "Error", "Please select a model")
+            return
 
-        if success:
-            QMessageBox.information(
-                self, 
-                "Success", 
-                f"API configuration saved successfully!\n\nProvider: {provider.value}\nModel: {model}"
-            )
-        else:
-            QMessageBox.warning(
-                self, 
-                "Error", 
-                "Failed to save API configuration"
-            )
+        api_manager = get_api_config_manager()
+        
+        # Save configuration using separate methods
+        api_manager.set_provider(provider)
+        api_manager.set_api_key(provider, api_key)
+        api_manager.set_model(provider, model)
+
+        QMessageBox.information(
+            self, 
+            "Success", 
+            f"API configuration saved successfully!\n\nProvider: {provider.value}\nModel: {model}"
+        )
 
