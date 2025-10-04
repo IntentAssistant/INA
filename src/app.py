@@ -17,7 +17,6 @@ from .ui.dashboard import Dashboard
 from .ui.notification import NotificationManager
 
 from .config.constants import *
-from .config.user_config import UserConfig
 from .config.prompt_config import PromptConfig
 
 from .manager import ThreadManager
@@ -44,10 +43,7 @@ class IntentionalComputingApp(rumps.App):
             "", icon=None, quit_button=None
         )  # Empty name to hide from menu bar
 
-        # Initialize configuration
-        self.config = UserConfig()
-
-        # Initialize storage
+        # Initialize storage (no user config needed - local only)
         self.storage = LocalStorage()
 
         # Initialize notification system
@@ -113,21 +109,19 @@ class IntentionalComputingApp(rumps.App):
         self._check_display_count()
         self.prompt_config = PromptConfig(self.storage)  # Pass storage to prompt_config
 
-        # Get selected display from settings - but force to 0 for single display
-        settings = self.config.get_settings()
-        selected_display = 0  # Always use first display in single display environment
+        # Always use first display (primary)
+        selected_display = 0
 
         # Create ThreadManager first
         self.manager = ThreadManager(
             self.storage,
             self.prompt_config,
             None,  # Dashboard will be set later
-            self.config,
             selected_display=selected_display,
         )
 
         # Now create Dashboard with required arguments
-        self.dashboard = Dashboard(self.manager, self.config, self.storage)
+        self.dashboard = Dashboard(self.manager, self.storage)
 
         # Set dashboard reference in manager
         self.manager.dashboard = self.dashboard
@@ -207,7 +201,6 @@ class IntentionalComputingApp(rumps.App):
                 print(f"[INIT] Using primary display: {name} ({resolution})")
 
                 # Always use first display
-                self.config.update_settings({"selected_display": 0})
                 # Only set manager's selected_display if manager exists
                 if hasattr(self, "manager") and self.manager is not None:
                     self.manager.selected_display = 0
@@ -738,7 +731,8 @@ class IntentionalComputingApp(rumps.App):
     def play_sound(self):
         """Play notification sound"""
         try:
-            sound_settings = self.config.get_sound_settings()
+            # Sound functionality disabled
+            return
 
             # Get current state (0 = focused, 1 = distracted)
             if hasattr(self, "current_state") and self.current_state == 1:
@@ -790,9 +784,8 @@ class IntentionalComputingApp(rumps.App):
 
     def start_auto_capture(self, capture_callback, analysis_callback):
         """Start auto capture with proper task directory setup"""
-        # Check if user ID and password are set
-        user_info = self.config.get_user_info()
-        if not user_info or not user_info.get("name") or not user_info.get("password"):
+        # User config removed - direct local usage only
+        if False:  # Disabled - no user validation needed
             from .ui.dialogs import Dialogs
 
             Dialogs.show_error(

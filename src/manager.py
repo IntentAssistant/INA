@@ -40,7 +40,6 @@ class ThreadManager(QObject):
         storage,
         prompt_config,
         dashboard,
-        user_config,
         selected_display=0,
     ):
         super().__init__()
@@ -48,8 +47,12 @@ class ThreadManager(QObject):
         self.uploader = None  # Cloud upload removed - using direct LLM APIs
         self.prompt_config = prompt_config
         self.dashboard = dashboard
-        self.user_config = user_config
         self.__selected_display = selected_display
+
+        # Add image cache (keep last 10 images in memory for feedback)
+        from collections import deque
+
+        self.image_cache = deque(maxlen=10)  # Auto-remove oldest when full
 
         # Initialize timers
         self.capture_timer = QTimer()
@@ -88,11 +91,6 @@ class ThreadManager(QObject):
         # Track previous app state for app change detection
         self.previous_app_name = None
         self.previous_app_domain = None
-
-        # Set initial user name from config
-        user_info = self.user_config.get_user_info()
-        if user_info and "name" in user_info:
-            self.storage.set_user_name(user_info["name"])
 
         # Initialize other components
         self.current_capture_thread = None
@@ -494,10 +492,13 @@ class ThreadManager(QObject):
             # Detect app change
             app_changed = self._detect_app_change(app_name, url)
 
-            # Get user info and current task
-            user_info = self.user_config.get_user_info()
-            user_info["current_task"] = self.dashboard.current_task
-            user_info["notification"] = self.next_analysis_has_notification
+            # Get user info and current task (user_config removed)
+            user_info = {
+                "name": "local_user",
+                "device_name": "mac_os_device",
+                "current_task": self.dashboard.current_task,
+                "notification": self.next_analysis_has_notification,
+            }
 
             # Increment image number for this analysis
             self.current_session_image_num += 1
@@ -1028,24 +1029,16 @@ class ThreadManager(QObject):
             # Increment image number for this analysis
             self.current_session_image_num += 1
 
-            # Prepare user info with session_id for new backend schema
+            # Prepare user info with session_id for new backend schema (user_config removed)
             user_info = {
-                "name": (
-                    self.user_config.get_user_info().get("name", "default_user")
-                    if self.user_config
-                    else "default_user"
-                ),
+                "name": "local_user",
                 "session_id": (
                     getattr(self.dashboard, "current_session_start_time", thread_id)
                     if self.dashboard
                     else thread_id
                 ),
                 "current_task": task,
-                "device_name": (
-                    self.user_config.get_user_info().get("device_name", "mac_os_device")
-                    if self.user_config
-                    else "mac_os_device"
-                ),
+                "device_name": "mac_os_device",
                 "notification": has_notification,  # Add notification flag
                 "image_num": self.current_session_image_num,  # Session-based image counter
                 "frontmost_app": frontmost_app,  # Frontmost app info

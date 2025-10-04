@@ -86,329 +86,16 @@ ANIMATION_HIDE_DURATION = 200  # Hide animation duration in ms
 ANIMATION_SLIDE_OFFSET = 20  # Slide animation offset in pixels
 
 
-class FocusReminderPopup(QDialog):
-    """Strong popup dialog to remind user to return to intention work"""
-
-    return_clicked = pyqtSignal()
-
-    def __init__(self, intention):
-        super().__init__()
-        self.intention = intention
-        self.oldPos = None  # For window dragging
-        self.init_ui()
-
-    def init_ui(self):
-        """Initialize the popup UI"""
-        # Check if text is Korean or English
-        import re
-
-        is_korean = bool(re.search("[가-힣]", self.intention))
-
-        # Window settings
-        self.setWindowTitle(get_text("focus_reminder_title"))
-        self.setFixedSize(500, 300)
-        self.setWindowFlags(
-            Qt.WindowType.Dialog
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-
-        # Center on screen
-        from PyQt6.QtWidgets import QApplication
-
-        screen = QApplication.primaryScreen().geometry()
-        self.move(
-            (screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2
-        )
-
-        # Main layout
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        # Warning icon and title
-        title_layout = QHBoxLayout()
-
-        icon_label = QLabel("⚠️")
-        icon_label.setStyleSheet("font-size: 32px;")
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        if is_korean:
-            title_text = get_text("focus_reminder_korean_title")
-            message_text = get_text(
-                "focus_reminder_korean_message", intention=self.intention
-            )
-            button_text = get_text("focus_reminder_korean_button")
-        else:
-            title_text = get_text("focus_reminder_english_title")
-            message_text = get_text(
-                "focus_reminder_english_message", intention=self.intention
-            )
-            button_text = get_text("focus_reminder_english_button")
-
-        title_label = QLabel(title_text)
-        title_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 20px;
-                font-weight: bold;
-                color: #FF6B35;
-                margin-left: 10px;
-            }
-        """
-        )
-
-        title_layout.addWidget(icon_label)
-        title_layout.addWidget(title_label)
-        title_layout.addStretch()
-
-        # Message
-        message_label = QLabel(message_text)
-        message_label.setWordWrap(True)
-        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        message_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 16px;
-                line-height: 1.5;
-                color: white;
-                background-color: #2c2c2c;
-                padding: 20px;
-                border-radius: 10px;
-                border: 2px solid #FFD700;
-            }
-        """
-        )
-
-        # Return button
-        return_btn = QPushButton(button_text)
-        return_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #FF6B35;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                padding: 15px 30px;
-                font-size: 16px;
-                font-weight: bold;
-                min-width: 200px;
-            }
-            QPushButton:hover {
-                background-color: #E55A2B;
-            }
-            QPushButton:pressed {
-                background-color: #CC4A21;
-            }
-        """
-        )
-        return_btn.clicked.connect(self.on_return_clicked)
-
-        # Button container for centering
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(return_btn)
-        button_layout.addStretch()
-
-        # Add to main layout
-        layout.addLayout(title_layout)
-        layout.addWidget(message_label)
-        layout.addStretch()
-        layout.addLayout(button_layout)
-
-        # Set dialog style
-        self.setStyleSheet(
-            """
-            QDialog {
-                background-color: #202020;
-                border: 3px solid #FF6B35;
-                border-radius: 15px;
-            }
-        """
-        )
-
-        # Auto-close timer (optional - remove if you want manual close only)
-        self.auto_close_timer = QTimer()
-        self.auto_close_timer.setSingleShot(True)
-        self.auto_close_timer.timeout.connect(self.close)
-        # Commented out auto-close for now - user must click button
-        # self.auto_close_timer.start(15000)  # Auto close after 15 seconds
-
-    def on_return_clicked(self):
-        """Handle return button click"""
-        self.return_clicked.emit()
-        self.close()
-
-    def closeEvent(self, event):
-        """Override close event to clean up timer"""
-        if hasattr(self, "auto_close_timer"):
-            self.auto_close_timer.stop()
-        super().closeEvent(event)
-
-    # Mouse drag handlers for moving the popup
-    def mousePressEvent(self, event):
-        """Handle mouse press to start window dragging"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.oldPos = event.globalPosition().toPoint()
-
-    def mouseMoveEvent(self, event):
-        """Handle mouse movement to move window"""
-        if self.oldPos:
-            delta = event.globalPosition().toPoint() - self.oldPos
-            self.move(self.pos() + delta)
-            self.oldPos = event.globalPosition().toPoint()
-
-    def mouseReleaseEvent(self, event):
-        """Handle mouse release to end window dragging"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.oldPos = None
-
-
-class SetIntentionReminderPopup(QDialog):
-    """Popup dialog to remind user to set an intention when they switch away from app"""
-
-    def __init__(self):
-        super().__init__()
-        self.oldPos = None  # For window dragging
-        self.init_ui()
-
-    def init_ui(self):
-        """Initialize the popup UI"""
-        # Window settings
-        self.setWindowTitle(get_text("set_intention_title"))
-        self.setFixedSize(520, 320)
-        self.setWindowFlags(
-            Qt.WindowType.Dialog
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-
-        # Center on screen
-        from PyQt6.QtWidgets import QApplication
-
-        screen = QApplication.primaryScreen().geometry()
-        self.move(
-            (screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2
-        )
-
-        # Main layout
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(25, 25, 25, 25)
-
-        # Warning icon and title
-        title_layout = QHBoxLayout()
-
-        icon_label = QLabel("💡")
-        icon_label.setStyleSheet("font-size: 32px;")
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Welcome message
-        title_text = get_text("set_intention_title")
-        message_text = get_text("set_intention_message_general")
-
-        title_label = QLabel(title_text)
-        title_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 18px;
-                font-weight: bold;
-                color: #007AFF;
-                margin-left: 10px;
-            }
-        """
-        )
-
-        title_layout.addWidget(icon_label)
-        title_layout.addWidget(title_label)
-        title_layout.addStretch()
-
-        # Message
-        message_label = QLabel(message_text)
-        message_label.setWordWrap(True)
-        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        message_label.setMinimumHeight(120)  # Ensure minimum height for text
-        message_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 14px;
-                line-height: 1.6;
-                color: white;
-                background-color: #2c2c2c;
-                padding: 25px;
-                border-radius: 10px;
-                border: 2px solid #007AFF;
-            }
-        """
-        )
-
-        # Hint message - now the main action guide
-        hint_label = QLabel(get_text("set_intention_hint"))
-        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 14px;
-                font-weight: bold;
-                color: #007AFF;
-                margin-top: 15px;
-                padding: 10px;
-                background-color: #3c3c3c;
-                border-radius: 8px;
-                border: 1px solid #007AFF;
-            }
-        """
-        )
-
-        # Add to main layout
-        layout.addLayout(title_layout)
-        layout.addWidget(message_label)
-        layout.addStretch()
-        layout.addWidget(hint_label)
-
-        # Set dialog style
-        self.setStyleSheet(
-            """
-            QDialog {
-                background-color: #202020;
-                border: 3px solid #007AFF;
-                border-radius: 15px;
-            }
-        """
-        )
-
-    # Mouse drag handlers for moving the popup
-    def mousePressEvent(self, event):
-        """Handle mouse press to start window dragging"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.oldPos = event.globalPosition().toPoint()
-
-    def mouseMoveEvent(self, event):
-        """Handle mouse movement to move window"""
-        if self.oldPos:
-            delta = event.globalPosition().toPoint() - self.oldPos
-            self.move(self.pos() + delta)
-            self.oldPos = event.globalPosition().toPoint()
-
-    def mouseReleaseEvent(self, event):
-        """Handle mouse release to end window dragging"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.oldPos = None
-
-
 class Dashboard(QWidget):
     # Signals to notify app when capture starts/stops
     capture_started = pyqtSignal()
     capture_stopped = pyqtSignal()
     # play_sound_requested signal removed - sound functionality disabled
 
-    def __init__(self, thread_manager, user_config, storage):
+    def __init__(self, thread_manager, storage):
         super().__init__()
         self.thread_manager = thread_manager
-        self.user_config = user_config
-        self.config = user_config  # Alias for compatibility
+        self.storage = storage
 
         # Store clarification data in memory
         self.current_clarification_data = []
@@ -433,14 +120,8 @@ class Dashboard(QWidget):
         self.last_frontmost_app = None
         self.app_switch_time = None
         self.focus_check_timer = QTimer()
-        self.focus_notification_timer = QTimer()
         self.FOCUS_CHECK_INTERVAL = 2000  # Check every 2 seconds
-        self.NOTIFICATION_DELAY = (
-            5000  # Show notification after 5 seconds (changed from 30)
-        )
-
-        # Focus popup window
-        self.focus_popup = None
+        # Focus popup feature removed - no longer needed
 
         # Cache current app name for focus monitoring
         self.current_intention_app_name = None
@@ -450,8 +131,6 @@ class Dashboard(QWidget):
 
         # Connect focus monitoring signals
         self.focus_check_timer.timeout.connect(self._check_app_focus)
-        self.focus_notification_timer.timeout.connect(self._show_focus_popup)
-        self.focus_notification_timer.setSingleShot(True)
 
         # Initialize managers
         self.history_manager = HistoryManager()
@@ -462,7 +141,6 @@ class Dashboard(QWidget):
         self.feedback_manager = FeedbackManager(
             self.thread_manager.prompt_config,
             storage,
-            user_config,
             dashboard=self,
             parent=self,
         )
@@ -1073,9 +751,8 @@ class Dashboard(QWidget):
 
     def set_task(self):
         """Set the current task from the input field"""
-        # Check if user ID and password are set before allowing task setting
-        user_info = self.user_config.get_user_info()
-        if not user_info or not user_info.get("name") or not user_info.get("password"):
+        # User config removed - direct local usage only
+        if False:  # Disabled - no user validation needed
             from ..ui.dialogs import Dialogs
 
             Dialogs.show_error(
@@ -1225,8 +902,7 @@ class Dashboard(QWidget):
             return
 
         # Check if user ID and password are set before allowing capture start
-        if not self.is_capturing:  # Only check when starting capture
-            user_info = self.user_config.get_user_info()
+        if not self.is_capturing and False:  # Disabled - no user validation needed
             if (
                 not user_info
                 or not user_info.get("name")
@@ -1420,8 +1096,8 @@ class Dashboard(QWidget):
             # Start dragging
             self.oldPos = event.globalPosition().toPoint()
 
-            # Close focus popup if visible when dashboard is clicked
-            self._close_focus_popup_on_dashboard_click()
+            # Focus popup feature removed
+            pass
 
     def mouseMoveEvent(self, event):
         """Handle mouse movement - allow dragging from dashboard"""
@@ -1592,7 +1268,7 @@ class Dashboard(QWidget):
             from ..ui.settings_dialog import UserSettingsDialog
             from PyQt6.QtWidgets import QDialog
 
-            self.user_settings_dialog = UserSettingsDialog(self.config.get_user_info())
+            self.user_settings_dialog = UserSettingsDialog({})
             if self.user_settings_dialog.exec() == QDialog.DialogCode.Accepted:
                 user_input = self.user_settings_dialog.get_user_input()
                 name, password, device = (
@@ -2678,11 +2354,11 @@ class Dashboard(QWidget):
 
         # Prepare session info for rating submission
         session_info = {
-            "user_id": self.user_config.get_user_info()["name"],
+            "user_id": "local_user",  # User config removed
             "session_id": getattr(self, "current_session_start_time", None),
             "task_name": self.current_task or "Unknown Task",
             "intention": self.current_task or "",
-            "device_name": self.user_config.get_user_info()["device_name"],
+            "device_name": "mac_os_device",  # User config removed
             "app_mode": "rating_submission",
         }
 
@@ -3240,20 +2916,7 @@ class Dashboard(QWidget):
 
             if is_intention_app:
                 # User is back in intention-related app
-                if self.focus_notification_timer.isActive():
-                    self.focus_notification_timer.stop()
-                    print(
-                        "[FOCUS DEBUG] Stopped notification timer - user back in intention app"
-                    )
-
-                # Don't automatically close popup here - only close when dashboard is directly clicked
-                # This prevents popup from closing when user clicks on the popup itself
-                # if self.focus_popup and self.focus_popup.isVisible():
-                #     self.focus_popup.close()
-                #     self.focus_popup = None
-                #     print(
-                #         "[FOCUS DEBUG] Automatically closed popup - user returned to app"
-                #     )
+                # Focus popup feature removed - no notification timer
 
                 # Reset state for fresh detection when user leaves again
                 if self.app_switch_time is not None:
@@ -3270,112 +2933,31 @@ class Dashboard(QWidget):
                 # App changed to non-intention app
                 if self.app_switch_time is None:
                     self.app_switch_time = time.time()
-                    print(
-                        f"[FOCUS DEBUG] Starting {self.NOTIFICATION_DELAY/1000}s timer for app: {current_app}"
-                    )
-                    self.focus_notification_timer.start(self.NOTIFICATION_DELAY)
                     print(f"[FOCUS] User switched to: {current_app}")
+                    # Focus popup feature removed - no notification timer
 
             self.last_frontmost_app = current_app
 
         except Exception as e:
             print(f"[ERROR] Focus monitoring error: {e}")
 
-    def _show_focus_popup(self):
-        """Show strong popup to return to intention app"""
-        print("[FOCUS DEBUG] _show_focus_popup called")
-
-        if not self.focus_monitoring_enabled:
-            print("[FOCUS DEBUG] Popup not shown - monitoring disabled")
-            return
-
-        # Don't show popup during active session (when user is supposed to be working)
-        if self.is_capturing:
-            print(
-                "[FOCUS DEBUG] Popup not shown - session in progress (user should be working)"
-            )
-            return
-
-        # Don't show popup if rating window is visible - only show after rating is complete
-        if self.is_rating_window_visible():
-            print("[FOCUS DEBUG] Popup not shown - rating window is visible")
-            return
-
-        # Don't show popup if clarification window is visible - wait until clarification is complete
-        if self.is_clarification_window_visible():
-            print("[FOCUS DEBUG] Popup not shown - clarification window is visible")
-            return
-
-        # Don't show popup if settings dialog is visible
-        if self.is_settings_dialog_visible():
-            print("[FOCUS DEBUG] Popup not shown - settings dialog is visible")
-            return
-
-        # Don't show popup if already visible
-        if self.focus_popup and self.focus_popup.isVisible():
-            print("[FOCUS DEBUG] Popup not shown - already visible")
-            return
-
-        # Only show popup if user has set an intention
-        if not self.current_task or not self.current_task.strip():
-            print("[FOCUS DEBUG] Popup not shown - no intention set")
-            return
-
-        # Show popup to remind user about intention
-        print("[FOCUS DEBUG] Creating focus reminder popup - user switched away from app")
-        self.focus_popup = FocusReminderPopup(self.current_task)
-        self.focus_popup.return_clicked.connect(self._on_focus_popup_return)
-
-        self.focus_popup.show()
-        # Don't apply opacity to focus popup - keep it fully visible for important alerts
-        # self.apply_current_opacity_to_window(self.focus_popup)
-
-        # Show notification
-        from ..ui.notification import NotificationManager
-
-        NotificationManager.show_notification(
-            title=get_text("focus_notification_title"),
-            subtitle=get_text("focus_notification_subtitle"),
-            message=get_text("focus_notification_message"),
-            state=1,  # Use distracted state for focus reminder
-            dashboard=self,
-            notification_context=None,  # No context for focus reminders
-        )
-        print(
-            f"[FOCUS] ✅ POPUP + NOTIFICATION shown - intention: {self.current_task}"
-        )
-
-    def _on_focus_popup_return(self):
-        """Handle return button click from focus popup"""
-        if self.focus_popup:
-            self.focus_popup.close()
-            self.focus_popup = None
-
-        # Reset app switch detection state to allow new notifications
-        self.app_switch_time = None
-        if self.focus_notification_timer.isActive():
-            self.focus_notification_timer.stop()
-
-        print("[FOCUS] User clicked return to work - state reset for new detection")
+    # Focus popup feature removed - no longer showing popups for app switches
 
     def start_focus_monitoring(self):
         """Start monitoring app focus when user clicks Start button"""
         if self.current_task:
-            print(
-                f"[FOCUS] Starting focus monitoring for task: '{self.current_task}'"
-            )
-            print(
-                f"[FOCUS] Check interval: {self.FOCUS_CHECK_INTERVAL/1000}s, Notification delay: {self.NOTIFICATION_DELAY/1000}s"
-            )
-            
+            print(f"[FOCUS] Starting focus monitoring for task: '{self.current_task}'")
+            print(f"[FOCUS] Check interval: {self.FOCUS_CHECK_INTERVAL/1000}s")
+
             # Get and cache current app name for focus monitoring
             if self.current_intention_app_name is None:
                 from ..utils.activity import get_current_app_name
+
                 self.current_intention_app_name = get_current_app_name()
                 print(
                     f"[FOCUS] Cached intention app name: '{self.current_intention_app_name}'"
                 )
-            
+
             self.focus_monitoring_enabled = True
             from ..utils.activity import get_frontmost_app
 
@@ -3392,14 +2974,9 @@ class Dashboard(QWidget):
             print("[FOCUS] Stopping focus monitoring")
             self.focus_monitoring_enabled = False
             self.focus_check_timer.stop()
-            self.focus_notification_timer.stop()
             self.app_switch_time = None
             self.last_frontmost_app = None
-
-            # Close focus popup if visible
-            if self.focus_popup and self.focus_popup.isVisible():
-                self.focus_popup.close()
-                self.focus_popup = None
+            # Focus popup feature removed
 
     def on_opacity_changed(self, value):
         """Handle opacity slider value change"""
@@ -3419,13 +2996,7 @@ class Dashboard(QWidget):
                 if window and window.isVisible():
                     window.setWindowOpacity(opacity)
 
-        # Don't apply opacity to focus popup - keep it fully visible for important alerts
-        # if (
-        #     hasattr(self, "focus_popup")
-        #     and self.focus_popup
-        #     and self.focus_popup.isVisible()
-        # ):
-        #     self.focus_popup.setWindowOpacity(opacity)
+        # Focus popup feature removed
 
         print(
             f"[UI] Opacity changed to {value}% ({opacity:.1f}) - applied to all windows"
@@ -3444,17 +3015,8 @@ class Dashboard(QWidget):
         self.show_llm_response_window(message, 0.0)  # 0.0 = focused
 
     def _close_focus_popup_on_dashboard_click(self):
-        """Close focus popup when dashboard is clicked"""
-        if self.focus_popup and self.focus_popup.isVisible():
-            self.focus_popup.close()
-            self.focus_popup = None
-
-            # Reset app switch detection state to allow new notifications
-            self.app_switch_time = None
-            if self.focus_notification_timer.isActive():
-                self.focus_notification_timer.stop()
-
-            print("[FOCUS DEBUG] Closed popup due to dashboard click")
+        """Focus popup feature removed - this method is now a no-op"""
+        pass
 
     def focusInEvent(self, event):
         """Handle focus in event when dashboard gets focus"""
@@ -3489,8 +3051,8 @@ class Dashboard(QWidget):
             event.type() == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
         ):
-            # Any left click on dashboard or its children should close the focus popup
-            self._close_focus_popup_on_dashboard_click()
+            # Focus popup feature removed
+            pass
 
         # Continue with normal event processing
         return super().eventFilter(source, event)

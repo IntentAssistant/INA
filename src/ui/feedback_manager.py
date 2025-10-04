@@ -111,7 +111,6 @@ class ReflectionThread(QThread):
     def __init__(
         self,
         prompt,
-        user_config,
         dashboard=None,
         image_id=None,
         image_path=None,
@@ -121,7 +120,6 @@ class ReflectionThread(QThread):
     ):
         super().__init__(parent)
         self.prompt = prompt
-        self.user_config = user_config
         self.dashboard = dashboard
         self.image_id = image_id  # Firestore image document ID
         self.image_path = image_path  # Path to image file for reflection analysis
@@ -196,9 +194,9 @@ class ReflectionThread(QThread):
                 ):
                     current_task = self.dashboard.current_task
 
-            user_info = self.user_config.get_user_info() if self.user_config else {}
-            user_id = user_info.get("name", "Anonymous")
-            device_name = user_info.get("device_name", "mac_os_device")
+            # User config removed - direct local usage only
+            user_id = "local_user"
+            device_name = "mac_os_device"
 
             # Process image if available
             encoded_images = []
@@ -369,12 +367,11 @@ class FeedbackManager(QObject):
     message_sent = pyqtSignal(dict)  # Signal for feedback message sent
 
     def __init__(
-        self, prompt_config, storage, user_config, dashboard=None, parent=None
+        self, prompt_config, storage, dashboard=None, parent=None
     ):
         super().__init__(parent)
         self.prompt_config = prompt_config
         self.storage = storage
-        self.user_config = user_config
         self.dashboard = dashboard  # Add dashboard reference to get session_id
         self.reflection_threads = {}
         self.completed_reflection_results = {}
@@ -417,7 +414,6 @@ class FeedbackManager(QObject):
 
             reflection_thread = ReflectionThread(
                 prompt=reflection_prompt,
-                user_config=self.user_config,
                 dashboard=self.dashboard,
                 image_id=image_id,
                 image_path=image_path,
@@ -460,9 +456,9 @@ class FeedbackManager(QObject):
                 return
 
             # Get user info
-            user_info = self.user_config.get_user_info() if self.user_config else {}
-            user_id = user_info.get("name", "Anonymous")
-            device_name = user_info.get("device_name", "mac_os_device")
+            # User config removed - direct local usage only
+            user_id = "local_user"
+            device_name = "mac_os_device"
 
             # Get session info
             current_session_id = "unknown_session"
@@ -558,9 +554,9 @@ class FeedbackManager(QObject):
             print(f"[FEEDBACK_MESSAGE] Using notification context for feedback message")
 
             # Get user info
-            user_info = self.user_config.get_user_info() if self.user_config else {}
-            user_id = user_info.get("name", "Anonymous")
-            device_name = user_info.get("device_name", "mac_os_device")
+            # User config removed - direct local usage only
+            user_id = "local_user"
+            device_name = "mac_os_device"
 
             # Use context data instead of current dashboard state
             context_session_id = "unknown_session"
