@@ -6,11 +6,12 @@ Replaces the Cloud Run backend with direct API calls
 import base64
 import io
 import json
+import os
 import requests
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from PIL import Image
-import google.generativeai as genai
+from google import genai
 
 from ..config.api_config import (
     LLMProvider,
@@ -26,24 +27,32 @@ from ..config.api_config import (
 class DirectLLMClient:
     """Direct API client for LLM services without Cloud Run backend"""
 
-    def __init__(self, provider: LLMProvider = DEFAULT_LLM_PROVIDER):
+    def __init__(
+        self, provider: LLMProvider = DEFAULT_LLM_PROVIDER, model: Optional[str] = None
+    ):
         self.provider = provider
         self.config = get_model_config(provider)
         self.api_key = get_api_key(provider)
+
+        # Override model if provided
+        if model:
+            self.config["model"] = model
 
         if not self.api_key:
             raise ValueError(
                 f"API key not found for {provider.value}. Please set {self.config['api_key_env']} environment variable."
             )
 
-        # Initialize Gemini SDK if using Gemini
+        # Initialize Gemini SDK if using Gemini (new SDK)
         if self.provider == LLMProvider.GEMINI:
-            genai.configure(api_key=self.api_key)
-            self.gemini_model = genai.GenerativeModel(self.config["model"])
-            self.generation_config = genai.GenerationConfig(
-                temperature=self.config["temperature"],
-                max_output_tokens=self.config["max_tokens"],
-            )
+            os.environ["GOOGLE_API_KEY"] = self.api_key
+            self.gemini_client = genai.Client()
+            self.gemini_model_id = self.config["model"]
+            # Store generation config parameters
+            self.gemini_config = {
+                "temperature": self.config["temperature"],
+                "max_output_tokens": self.config["max_tokens"],
+            }
 
     def prepare_image_for_api(self, image_data: bytes) -> str:
         """
@@ -92,6 +101,98 @@ class DirectLLMClient:
 
         except Exception as e:
             raise ValueError(f"Failed to process image: {str(e)}")
+
+    def test_api_key(self) -> Dict:
+        """
+        Test if the API key is valid by making a simple API call
+
+        Returns:
+            dict: {"success": bool, "message": str}
+        """
+        try:
+            if self.provider == LLMProvider.GEMINI:
+                return self._test_gemini_key()
+            elif self.provider == LLMProvider.OPENAI:
+                return self._test_openai_key()
+            else:
+                return {
+                    "success": False,
+                    "message": f"Unsupported provider: {self.provider}",
+                }
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def _test_gemini_key(self) -> Dict:
+        """Test Gemini API key with a simple request (new SDK)"""
+        try:
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_id,
+                contents="Hello! Please respond with 'OK'",
+            )
+
+            if response.text:
+                return {
+                    "success": True,
+                    "message": f"Gemini API is working!\nModel: {self.config['model']}\nResponse: {response.text[:50]}",
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Received empty response from Gemini",
+                }
+        except Exception as e:
+            error_msg = str(e)
+            if "API_KEY_INVALID" in error_msg or "invalid" in error_msg.lower():
+                return {
+                    "success": False,
+                    "message": "Invalid API key. Please check your Gemini API key.",
+                }
+            else:
+                return {"success": False, "message": f"Gemini API error: {error_msg}"}
+
+    def _test_openai_key(self) -> Dict:
+        """Test OpenAI API key with a simple request"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "model": self.config["model"],
+                "messages": [
+                    {"role": "user", "content": "Hello! Please respond with 'OK'"}
+                ],
+                "max_tokens": 10,
+                "temperature": 0,
+            }
+
+            response = requests.post(
+                f"{self.config['base_url']}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                message = result["choices"][0]["message"]["content"]
+                return {
+                    "success": True,
+                    "message": f"OpenAI API is working!\nModel: {self.config['model']}\nResponse: {message}",
+                }
+            elif response.status_code == 401:
+                return {
+                    "success": False,
+                    "message": "Invalid API key. Please check your OpenAI API key.",
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"OpenAI API error ({response.status_code}): {response.text}",
+                }
+        except Exception as e:
+            return {"success": False, "message": f"OpenAI API error: {str(e)}"}
 
     def analyze_screen(self, image_data: bytes, prompt: str, context: Dict) -> Dict:
         """
@@ -176,7 +277,7 @@ class DirectLLMClient:
     def _analyze_with_gemini(
         self, base64_image: str, prompt: str, context: Dict
     ) -> Dict:
-        """Analyze using Google Gemini Pro Vision API with official SDK"""
+        """Analyze using Google Gemini Pro Vision API with new SDK"""
 
         # Use the prompt from prompts.py (passed from manager.py via prompt_config)
         # The prompt already includes task, clarification, reflection, and all context
@@ -190,10 +291,11 @@ class DirectLLMClient:
         image_data = base64.b64decode(base64_image)
         image = Image.open(io.BytesIO(image_data))
 
-        # Use SDK for analysis
+        # Use new SDK for analysis
         try:
-            response = self.gemini_model.generate_content(
-                [full_prompt, image], generation_config=self.generation_config
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_id,
+                contents=[full_prompt, image],
             )
 
             if not response.text:
@@ -319,10 +421,11 @@ class DirectLLMClient:
             )
 
     def _get_clarification_gemini(self, prompt: str, context: Dict) -> str:
-        """Get clarification using Gemini API with official SDK"""
+        """Get clarification using Gemini API with new SDK"""
         try:
-            response = self.gemini_model.generate_content(
-                prompt, generation_config=self.generation_config
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_id,
+                contents=prompt,
             )
 
             if not response.text:
@@ -361,7 +464,7 @@ class DirectLLMClient:
     def _analyze_reflection_gemini(
         self, prompt: str, images: List[Image.Image], task: str
     ) -> str:
-        """Analyze reflection using Gemini with multiple images"""
+        """Analyze reflection using Gemini with multiple images (new SDK)"""
         try:
             # Gemini supports multiple images in a single request
             content_parts = [prompt]
@@ -370,8 +473,9 @@ class DirectLLMClient:
             for img in images[:10]:
                 content_parts.append(img)
 
-            response = self.gemini_model.generate_content(
-                content_parts, generation_config=self.generation_config
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_id,
+                contents=content_parts,
             )
 
             if not response.text:

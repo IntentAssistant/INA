@@ -147,6 +147,9 @@ class LLMAnalysisThread(QThread):
             result["analyzed_images"] = []  # No local images anymore
             result["analyzed_image_count"] = 1
             result["primary_analyzed_image"] = None  # No local image path
+            
+            # Add prompt for debugging
+            result["prompt"] = self.prompt
 
             # Emit the result
             if self.analysis_complete and not self._is_stopping:

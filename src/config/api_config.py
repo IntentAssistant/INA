@@ -6,7 +6,8 @@ Supports both OpenAI GPT and Google Gemini APIs
 import os
 import json
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from google import genai
 
 
 class LLMProvider(Enum):
@@ -24,9 +25,9 @@ API_CONFIG = {
         "api_key_env": "OPENAI_API_KEY",
         "base_url": "https://api.openai.com/v1",
         "models": {
-            "gpt-4o": "GPT-4o (Latest, Recommended)",
-            "gpt-4o-mini": "GPT-4o Mini (Faster, Cheaper)",
-            "gpt-4-turbo": "GPT-4 Turbo (Previous)",
+            "gpt-4o": "GPT-4o",
+            "gpt-4o-mini": "GPT-4o Mini",
+            "custom": "Other (Enter manually)",
         },
         "default_model": "gpt-4o",
         "max_tokens": 500,
@@ -37,13 +38,14 @@ API_CONFIG = {
         "api_key_env": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
         "models": {
-            "gemini-2.5-pro": "Gemini 2.5 Pro (Most Capable)",
+            "gemini-2.5-pro": "Gemini 2.5 Pro",
             "gemini-2.5-flash": "Gemini 2.5 Flash",
             "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
-            "gemini-2.0-flash": "Gemini 2.0 Flash (Recommended)",
+            "gemini-2.0-flash": "Gemini 2.0 Flash",
             "gemini-2.0-flash-lite": "Gemini 2.0 Flash Lite",
+            "custom": "Other (Enter manually)",
         },
-        "default_model": "gemini-2.0-flash",
+        "default_model": "gemini-2.5-flash",
         "max_tokens": 500,
         "temperature": 0.3,
     },
@@ -151,6 +153,163 @@ class APIConfigManager:
 
 # Global instance
 _api_config_manager = None
+
+
+def fetch_available_gemini_models(api_key: str) -> Dict[str, str]:
+    """
+    Fetch available Gemini models from the API (new SDK)
+
+    Args:
+        api_key: Gemini API key
+
+    Returns:
+        Dict mapping model IDs to display names
+    """
+    try:
+        os.environ["GOOGLE_API_KEY"] = api_key
+        client = genai.Client()
+        models = {}
+
+        print("[API_CONFIG] Fetching available Gemini models...")
+        print("[API_CONFIG] ==================== ALL MODELS ====================")
+
+        all_gemini_models = []
+        models_response = client.models.list()
+
+        for model in models_response:
+            model_id = model.name.replace("models/", "")
+
+            # Print ALL models for debugging
+            print(f"[API_CONFIG] Model: {model_id}")
+            print(f"  - Full name: {model.name}")
+
+            # Exclude image/video generation models (imagen, veo, etc.)
+            if any(
+                exclude in model_id.lower()
+                for exclude in ["imagen", "veo", "image", "video"]
+            ):
+                print(f"  ❌ Skipped: Image/video generation model")
+                continue
+
+            # Only include gemini-* models
+            if not model_id.startswith("gemini"):
+                print(f"  ❌ Skipped: Not a gemini model")
+                continue
+
+            # Exclude audio/voice/TTS/special feature models (only keep VLM)
+            exclude_keywords = [
+                "lite",  # Lite versions
+                "audio",  # Audio models
+                "voice",  # Voice models
+                "tts",  # Text-to-speech
+                "thinking",  # Thinking models (show reasoning)
+                "dialog",  # Dialog-specific models
+                "live",  # Live/streaming models
+                "native",  # Native audio/video
+                "preview",  # Preview/experimental versions
+            ]
+
+            if any(keyword in model_id.lower() for keyword in exclude_keywords):
+                excluded_reason = next(
+                    kw for kw in exclude_keywords if kw in model_id.lower()
+                )
+                print(
+                    f"  ❌ Skipped: Contains '{excluded_reason}' (not a standard VLM)"
+                )
+                continue
+
+            all_gemini_models.append(model_id)
+            print(f"  ✅ Added to list")
+
+        print(
+            "[API_CONFIG] ==================== PROCESSING MODELS ===================="
+        )
+
+        # Process all gemini models
+        for model_id in all_gemini_models:
+            # Create a friendly display name
+            display_name = model_id.replace("gemini-", "Gemini ")
+            display_name = display_name.replace("-", " ").title()
+
+            # Add markers based on version
+            if "2.5-pro" in model_id:
+                display_name += " (Most Capable)"
+            elif "2.5-flash" in model_id:
+                display_name += " (Fast & Latest)"
+            elif "2.0-flash" in model_id:
+                display_name += " (Recommended)"
+            elif "exp" in model_id:
+                display_name += " (Experimental)"
+            elif "1.5-pro" in model_id:
+                display_name += " (Stable)"
+
+            models[model_id] = display_name
+            print(f"[API_CONFIG] ✅ {model_id} -> {display_name}")
+
+        # Sort by version (2.5 > 2.0 > exp > 1.5)
+        sorted_models = {}
+        for prefix in [
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-exp",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+        ]:
+            for model_id, name in sorted(models.items()):
+                if model_id.startswith(prefix) and model_id not in sorted_models:
+                    sorted_models[model_id] = name
+
+        print(f"[API_CONFIG] Total models found: {len(sorted_models)}")
+        return sorted_models if sorted_models else API_CONFIG["gemini"]["models"]
+
+    except Exception as e:
+        print(f"[API_CONFIG] Failed to fetch Gemini models: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return API_CONFIG["gemini"]["models"]
+
+
+def fetch_available_openai_models(api_key: str) -> Dict[str, str]:
+    """
+    Fetch available OpenAI models from the API
+
+    Args:
+        api_key: OpenAI API key
+
+    Returns:
+        Dict mapping model IDs to display names
+    """
+    try:
+        import requests
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.get(
+            "https://api.openai.com/v1/models", headers=headers, timeout=5
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            models = {}
+
+            # Filter to only GPT-4 and GPT-4o models
+            for model in data.get("data", []):
+                model_id = model["id"]
+                if model_id.startswith("gpt-4"):
+                    if model_id in ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"]:
+                        display_name = API_CONFIG["openai"]["models"].get(
+                            model_id, model_id.upper()
+                        )
+                        models[model_id] = display_name
+
+            return models if models else API_CONFIG["openai"]["models"]
+        else:
+            return API_CONFIG["openai"]["models"]
+
+    except Exception as e:
+        print(f"[API_CONFIG] Failed to fetch OpenAI models: {e}")
+        return API_CONFIG["openai"]["models"]
 
 
 def get_api_config_manager() -> APIConfigManager:
