@@ -309,14 +309,18 @@ class ReflectionThread(QThread):
                         prompt=self.prompt, images=pil_images, task=current_task
                     )
 
+                    print(
+                        f"[REFLECTION_DEBUG] Raw LLM response: {reflection_text[:200]}..."
+                    )
+
+                    # Store the raw response for parsing in _handle_reflection_complete
                     result = {
+                        "reflection_response": reflection_text,  # ← 이게 핵심!
                         "reflection": {
-                            "image_description": reflection_text,
-                            "reflected_implicit_intention": reflection_text,
+                            "raw_text": reflection_text,
                         },
                         "parsed_reflection": {
-                            "image_description": reflection_text,
-                            "reflected_implicit_intention": reflection_text,
+                            "raw_text": reflection_text,
                         },
                     }
                 else:
@@ -481,6 +485,20 @@ class FeedbackManager(QObject):
                     self.dashboard.thread_manager, "last_response_image_id"
                 ):
                     image_id = self.dashboard.thread_manager.last_response_image_id
+
+            # Save feedback to log
+            if self.storage:
+                feedback_log_data = {
+                    "task_name": task_name,
+                    "image_id": image_id,
+                    "feedback_type": feedback_type,
+                    "ai_judgement": ai_judgement,
+                    "feedback_case": f"{ai_judgement}_{feedback_type}",
+                    "llm_response": llm_response,
+                    "user_text": user_text,
+                }
+                self.storage.save_feedback(feedback_log_data)
+                print(f"[FEEDBACK] Feedback logged: {feedback_type} on {ai_judgement}")
 
             # Determine the appropriate reflection prompt based on feedback case
             reflection_prompt = format_reflection_prompt(
@@ -733,17 +751,71 @@ class FeedbackManager(QObject):
 
         try:
             # Format learning entry from reflection data
+            # The new structure uses "reflection" key with nested data
             reflection_response = reflection_data.get("reflection_response", None)
 
+            # Fallback: try to get from new structure
+            if not reflection_response:
+                reflection_obj = reflection_data.get("reflection", {})
+                if isinstance(reflection_obj, dict):
+                    # Try to get the text from the new structure
+                    reflection_response = reflection_obj.get(
+                        "reflected_implicit_intention", ""
+                    ) or reflection_obj.get("image_description", "")
+
+            print(
+                f"[REFLECTION_DEBUG] reflection_response type: {type(reflection_response)}"
+            )
+            print(
+                f"[REFLECTION_DEBUG] reflection_response value: {reflection_response}"
+            )
+
             try:
-                robust_pairs = re.findall(
-                    r'"([^"]+)"\s*:\s*"((?:\\.|[^"\\])*)"',  # key, value
-                    reflection_response,
-                )
-                reflection = {k: v.replace(r"\"", '"') for k, v in robust_pairs}
+                if reflection_response and isinstance(reflection_response, str):
+                    import json
+
+                    # Try to parse as JSON first
+                    try:
+                        # Extract JSON from markdown code blocks if present
+                        json_match = re.search(
+                            r"```(?:json)?\s*(\{.*?\})\s*```",
+                            reflection_response,
+                            re.DOTALL,
+                        )
+                        if json_match:
+                            json_str = json_match.group(1)
+                        else:
+                            # Try to find JSON object in the response
+                            json_match = re.search(
+                                r"\{.*\}", reflection_response, re.DOTALL
+                            )
+                            if json_match:
+                                json_str = json_match.group(0)
+                            else:
+                                json_str = reflection_response
+
+                        reflection = json.loads(json_str)
+                        print(
+                            f"[REFLECTION] Parsed JSON successfully: {list(reflection.keys())}"
+                        )
+                    except json.JSONDecodeError as e:
+                        print(f"[REFLECTION] JSON parse failed, trying regex: {e}")
+                        # Fallback to regex parsing
+                        robust_pairs = re.findall(
+                            r'"([^"]+)"\s*:\s*"((?:\\.|[^"\\])*)"',  # key, value
+                            reflection_response,
+                        )
+                        reflection = {k: v.replace(r"\"", '"') for k, v in robust_pairs}
+                        print(f"[REFLECTION] Regex parsed: {list(reflection.keys())}")
+                else:
+                    print(f"[REFLECTION] reflection_response is not a valid string")
+                    reflection = None
 
             except Exception as e:
                 print(f"[REFLECTION] Error formatting learning entry: {e}")
+                import traceback
+
+                traceback.print_exc()
                 reflection = None
             print(f"[REFLECTION] Result: {str(reflection)}")
 

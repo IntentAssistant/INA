@@ -790,6 +790,16 @@ class ThreadManager(QObject):
             reflection_intentions = self.current_reflection_data
             reflection_rules = self.current_reflection_rule
 
+            # 🔥 DEBUG: Log reflection data being passed to prompt
+            print(f"[REFLECTION_DEBUG] reflection_intentions: {reflection_intentions}")
+            print(f"[REFLECTION_DEBUG] reflection_rules: {reflection_rules}")
+            if reflection_intentions:
+                print(
+                    f"[REFLECTION_DEBUG] Number of intentions: {len(reflection_intentions)}"
+                )
+            if reflection_rules:
+                print(f"[REFLECTION_DEBUG] Number of rules: {len(reflection_rules)}")
+
             # Get session start time from dashboard
             session_start_time = None
             if self.dashboard and hasattr(self.dashboard, "current_session_start_time"):

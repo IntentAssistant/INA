@@ -1517,6 +1517,9 @@ class Dashboard(QWidget):
         if hasattr(self, "feedback_hide_timer") and self.feedback_hide_timer.isActive():
             self.feedback_hide_timer.stop()
 
+        # Reset feedback buttons to clean state before showing
+        self.reset_feedback_buttons()
+
         # Update feedback message based on current raw value
         self._update_feedback_message()
 
@@ -1671,11 +1674,17 @@ class Dashboard(QWidget):
 
     def highlight_feedback_button(self, button, feedback_type):
         """Highlight clicked feedback button with border color"""
-        # Reset both buttons to default style first
+        # Reset both buttons to default style first with explicit style
+        default_style = """
+            QPushButton {
+                border: 2px solid transparent;
+                border-radius: 12px;
+            }
+        """
         if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet("")
+            self.good_feedback_button.setStyleSheet(default_style)
         if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet("")
+            self.bad_feedback_button.setStyleSheet(default_style)
 
         # Highlight the clicked button
         if feedback_type == "good":
@@ -1760,10 +1769,17 @@ class Dashboard(QWidget):
 
     def reset_feedback_buttons(self):
         """Reset feedback button styles to default"""
+        default_style = """
+            QPushButton {
+                border: 2px solid transparent;
+                border-radius: 12px;
+            }
+        """
         if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet("")
+            self.good_feedback_button.setStyleSheet(default_style)
         if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet("")
+            self.bad_feedback_button.setStyleSheet(default_style)
+        print("[FEEDBACK] Button styles reset to default")
 
     def moveEvent(self, event):
         """Handle window move event to update popup window positions"""
@@ -2498,10 +2514,26 @@ class Dashboard(QWidget):
 
             if os.path.exists(clarification_path):
                 with open(clarification_path, "r", encoding="utf-8") as f:
-                    clarification_data = json.load(f)
+                    clarification_data_raw = json.load(f)
+
+                # Extract the augmented intentions list from the dict
+                if isinstance(clarification_data_raw, dict):
+                    clarification_data = clarification_data_raw.get(
+                        "augmented_intentions", []
+                    )
+                    print(
+                        f"[DASHBOARD] Extracted {len(clarification_data)} clarification intentions from dict"
+                    )
+                elif isinstance(clarification_data_raw, list):
+                    clarification_data = clarification_data_raw
+                else:
+                    print(
+                        f"[DASHBOARD] Unexpected clarification data type: {type(clarification_data_raw)}"
+                    )
+                    clarification_data = []
 
                 # Set clarification data in thread manager
-                if hasattr(self, "thread_manager"):
+                if hasattr(self, "thread_manager") and clarification_data:
                     self.thread_manager.set_clarification_data(clarification_data)
                     print(
                         f"[DASHBOARD] Loaded clarification data for: {intention} (file: {clarification_file})"

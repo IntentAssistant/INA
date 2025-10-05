@@ -476,6 +476,22 @@ class IntentionalComputingApp(rumps.App):
             # Store server message for later use
             self.last_server_message = current_message
 
+            # 🔥 CRITICAL: Store LLM response for feedback
+            # This must happen before updating UI so feedback has correct data
+            if self.dashboard and hasattr(
+                self.dashboard, "store_llm_response_for_feedback"
+            ):
+                # Get analyzed image path from manager
+                analyzed_image_path = None
+                if self.manager and hasattr(self.manager, "last_analyzed_image_path"):
+                    analyzed_image_path = self.manager.last_analyzed_image_path
+
+                self.dashboard.store_llm_response_for_feedback(
+                    llm_response=server_response,
+                    analyzed_image_path=analyzed_image_path,
+                )
+                print(f"[FEEDBACK] Stored LLM response for potential feedback")
+
             # Update consecutive counters
             if output == 1:  # Now distracted state
                 self.consecutive_ones += 1
@@ -536,15 +552,15 @@ class IntentionalComputingApp(rumps.App):
                     self.dashboard.current_task,
                     current_message,
                     self.current_state,
-                        on_good=lambda nid=notification_id: self._handle_notification_feedback(
-                            "good", nid
-                        ),
-                        on_bad=lambda nid=notification_id: self._handle_notification_feedback(
-                            "bad", nid
-                        ),
-                        dashboard=self.dashboard,
-                        notification_context=context_data,
-                    )
+                    on_good=lambda nid=notification_id: self._handle_notification_feedback(
+                        "good", nid
+                    ),
+                    on_bad=lambda nid=notification_id: self._handle_notification_feedback(
+                        "bad", nid
+                    ),
+                    dashboard=self.dashboard,
+                    notification_context=context_data,
+                )
                 self.current_message = current_message
             else:
                 # Handle state transitions for subsequent messages
@@ -601,15 +617,15 @@ class IntentionalComputingApp(rumps.App):
                         self.dashboard.current_task,
                         current_message,
                         self.current_state,
-                            on_good=lambda nid=notification_id: self._handle_notification_feedback(
-                                "good", nid
-                            ),
-                            on_bad=lambda nid=notification_id: self._handle_notification_feedback(
-                                "bad", nid
-                            ),
-                            dashboard=self.dashboard,
-                            notification_context=context_data,
-                        )
+                        on_good=lambda nid=notification_id: self._handle_notification_feedback(
+                            "good", nid
+                        ),
+                        on_bad=lambda nid=notification_id: self._handle_notification_feedback(
+                            "bad", nid
+                        ),
+                        dashboard=self.dashboard,
+                        notification_context=context_data,
+                    )
                     self.current_message = current_message
 
             # Handle focus reminders
@@ -704,15 +720,15 @@ class IntentionalComputingApp(rumps.App):
                         task,
                         reminder_message,
                         1,  # Always distracted state for reminders
-                            on_good=lambda nid=notification_id: self._handle_notification_feedback(
-                                "good", nid
-                            ),
-                            on_bad=lambda nid=notification_id: self._handle_notification_feedback(
-                                "bad", nid
-                            ),
-                            dashboard=self.dashboard,
-                            notification_context=context_data,
-                        )
+                        on_good=lambda nid=notification_id: self._handle_notification_feedback(
+                            "good", nid
+                        ),
+                        on_bad=lambda nid=notification_id: self._handle_notification_feedback(
+                            "bad", nid
+                        ),
+                        dashboard=self.dashboard,
+                        notification_context=context_data,
+                    )
                 except Exception as e:
                     print(f"[ERROR] Notification failed: {e}")
 

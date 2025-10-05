@@ -166,15 +166,10 @@ class NotificationManager:
                             import traceback
 
                             traceback.print_exc()
+                    else:
+                        print("⚠️  No Good callback provided")
 
-                    # 2단계: 이유 입력 요청 알림 (버튼 클릭 시점 context 사용)
-                    NotificationManager._show_reason_request(
-                        "good",
-                        button_id,
-                        dashboard,
-                        current_context or notification_context,
-                    )
-                    print("⚠️  No Good callback provided" if not on_good else "")
+                    print(f"[NOTIFICATION] Good feedback recorded - no reason request")
 
                 def _bad():
                     print("=" * 50)
@@ -218,15 +213,10 @@ class NotificationManager:
                             import traceback
 
                             traceback.print_exc()
+                    else:
+                        print("⚠️  No Bad callback provided")
 
-                    # 2단계: 이유 입력 요청 알림 (버튼 클릭 시점 context 사용)
-                    NotificationManager._show_reason_request(
-                        "bad",
-                        button_id,
-                        dashboard,
-                        current_context or notification_context,
-                    )
-                    print("⚠️  No Bad callback provided" if not on_bad else "")
+                    print(f"[NOTIFICATION] Bad feedback recorded - no reason request")
 
                 buttons = [
                     Button("✅", on_pressed=_good),

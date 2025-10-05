@@ -175,3 +175,28 @@ class LocalStorage:
             json.dump(data, f, indent=2)
 
         print(f"[STORAGE] Reflection data saved to {reflection_path}")
+
+    def save_feedback(self, feedback_data: dict):
+        """Save user feedback to a JSON log file"""
+        entry = {"timestamp": self.get_timestamp(), "feedback": feedback_data}
+
+        save_dir = self.get_capture_dir()
+        feedback_path = os.path.join(save_dir, "_feedbacks.json")
+
+        # Load existing if any
+        if os.path.exists(feedback_path):
+            try:
+                with open(feedback_path, "r") as f:
+                    data = json.load(f)
+            except Exception:
+                data = []
+        else:
+            data = []
+
+        data.append(entry)
+
+        # Save updated log
+        with open(feedback_path, "w") as f:
+            json.dump(data, f, indent=2)
+
+        print(f"[STORAGE] Feedback saved to {feedback_path}")
