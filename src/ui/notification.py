@@ -164,6 +164,14 @@ class NotificationManager:
             on_bad: Callback function for Bad button click
         """
         try:
+            # Check if notifications are enabled
+            from ..config.api_config import get_api_config_manager
+
+            api_manager = get_api_config_manager()
+            if not api_manager.get_notification_enabled():
+                print("[NOTIFICATION] Notifications are disabled - skipping")
+                return
+
             # Prepare emoji decorations
             title_with_emoji = NotificationManager._add_emoji_to_title(title, state)
             message_with_emoji = NotificationManager._add_emoji_to_message(

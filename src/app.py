@@ -79,7 +79,7 @@ class IntentionalComputingApp(rumps.App):
         # Initialize icons first
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
         self.default_icon = os.path.join(assets_dir, "icon.png")
-        self.recording_icon = os.path.join(assets_dir, "icon_recording.png")
+        # Recording icon removed - not needed
 
         # Initialize PyQt application FIRST
         self.qt_app = QApplication.instance()
@@ -284,7 +284,6 @@ class IntentionalComputingApp(rumps.App):
         # Start auto capture
         self.manager.start(self.do_capture, self.update_intention_status)
 
-        self.set_recording_icon()
         print("=== Capture Start Handling Complete ===\n")
 
     def _handle_capture_stop(self):
@@ -294,7 +293,6 @@ class IntentionalComputingApp(rumps.App):
         # Stop auto capture
         self.manager.stop()
 
-        self.set_default_icon()
         print("=== Capture Stop Handling Complete ===\n")
 
     def reset_state_tracking(self):
@@ -737,14 +735,6 @@ class IntentionalComputingApp(rumps.App):
                 # Reset counter
                 self.consecutive_focus_count = 0
                 self.current_message = message
-
-    def set_recording_icon(self):
-        """Change icon to recording state"""
-        self.icon = self.recording_icon
-
-    def set_default_icon(self):
-        """Restore default icon"""
-        self.icon = self.default_icon
 
     def play_sound(self):
         """Play notification sound"""

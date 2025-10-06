@@ -524,16 +524,26 @@ class UnifiedSettingsDialog(QDialog):
         notification_group = QGroupBox("Notification Settings")
         notification_layout = QVBoxLayout()
 
-        enable_notifications = QCheckBox("Enable desktop notifications")
-        enable_notifications.setChecked(True)
-        enable_notifications.setEnabled(False)  # Always enabled
-        notification_layout.addWidget(enable_notifications)
+        api_manager = get_api_config_manager()
+        self.enable_notifications_checkbox = QCheckBox("Enable desktop notifications")
+        self.enable_notifications_checkbox.setChecked(
+            api_manager.get_notification_enabled()
+        )
+        self.enable_notifications_checkbox.stateChanged.connect(
+            self.on_notification_enabled_changed
+        )
+        notification_layout.addWidget(self.enable_notifications_checkbox)
 
         notification_info = QLabel(
             "Notifications are managed by macOS system preferences"
         )
         notification_info.setStyleSheet("color: #888888;")
         notification_layout.addWidget(notification_info)
+
+        # Button to open macOS notification settings
+        open_settings_btn = QPushButton("Open macOS Notification Settings")
+        open_settings_btn.clicked.connect(self.open_macos_notification_settings)
+        notification_layout.addWidget(open_settings_btn)
 
         notification_group.setLayout(notification_layout)
         layout.addWidget(notification_group)
@@ -856,6 +866,13 @@ class UnifiedSettingsDialog(QDialog):
             window.deleteLater()
         self.highlight_windows.clear()
 
+    def on_notification_enabled_changed(self, state):
+        """Handle notification enabled/disabled change"""
+        enabled = state == Qt.CheckState.Checked.value
+        api_manager = get_api_config_manager()
+        api_manager.set_notification_enabled(enabled)
+        print(f"[NOTIFICATION] Notifications {'enabled' if enabled else 'disabled'}")
+
     def on_sound_enabled_changed(self, state):
         """Handle sound enabled/disabled change"""
         enabled = state == Qt.CheckState.Checked.value
@@ -920,6 +937,41 @@ class UnifiedSettingsDialog(QDialog):
         print(
             f"[SOUND] Settings saved - On-task: {on_task_sound}, Off-task: {off_task_sound}"
         )
+
+    def open_macos_notification_settings(self):
+        """Open macOS System Settings to Notifications"""
+        import subprocess
+
+        try:
+            # Try to open Notifications settings directly
+            # This works on macOS Ventura and later
+            result = subprocess.run(
+                [
+                    "open",
+                    "x-apple.systempreferences:com.apple.preference.notifications",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                # Fallback: just open System Settings
+                subprocess.run(["open", "-a", "System Settings"])
+                QMessageBox.information(
+                    self,
+                    "System Settings",
+                    "Please navigate to Notifications in System Settings",
+                )
+
+            print("[SETTINGS] Opened macOS Notification Settings")
+
+        except Exception as e:
+            print(f"[SETTINGS] Failed to open notification settings: {e}")
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Could not open System Settings.\n\nPlease open System Settings manually and navigate to Notifications.",
+            )
 
     def closeEvent(self, event):
         """Handle dialog close - clean up highlights"""

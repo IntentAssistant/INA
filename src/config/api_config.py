@@ -186,6 +186,15 @@ class APIConfigManager:
         """Get the off-task sound file (default: off_task_1.mp3)"""
         return self._config.get("off_task_sound", "off_task_1.mp3")
 
+    def set_notification_enabled(self, enabled: bool):
+        """Set whether notifications are enabled"""
+        self._config["notification_enabled"] = enabled
+        self._save_config()
+
+    def get_notification_enabled(self) -> bool:
+        """Get whether notifications are enabled (default: True)"""
+        return self._config.get("notification_enabled", True)
+
 
 # Global instance
 _api_config_manager = None
