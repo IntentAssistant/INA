@@ -2,6 +2,7 @@ import os
 import subprocess
 import uuid
 import time
+import threading
 from PyQt6.QtWidgets import QSystemTrayIcon
 from PyQt6.QtCore import QTimer
 
@@ -11,6 +12,72 @@ from desktop_notifier import DesktopNotifier, Button, ReplyField
 
 # Single notifier instance for the whole module
 notifier = DesktopNotifier(app_name="Intention")
+
+
+def play_notification_sound(state: int):
+    """Play notification sound based on state
+
+    Args:
+        state: 0 for focused (on-task), 1 for distracted (off-task)
+    """
+    try:
+        from ..config.api_config import get_api_config_manager
+
+        api_manager = get_api_config_manager()
+
+        # Check if sound is enabled
+        if not api_manager.get_sound_enabled():
+            print("[SOUND] Notification sound is disabled")
+            return
+
+        # Get sound file based on state
+        if state == 0:  # Focused
+            sound_file = api_manager.get_on_task_sound()
+            state_text = "FOCUSED (on-task)"
+        else:  # Distracted
+            sound_file = api_manager.get_off_task_sound()
+            state_text = "DISTRACTED (off-task)"
+
+        # Get assets directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        assets_dir = os.path.join(os.path.dirname(current_dir), "assets")
+        sound_path = os.path.join(assets_dir, sound_file)
+
+        if not os.path.exists(sound_path):
+            print(f"[SOUND] Sound file not found: {sound_path}")
+            return
+
+        print(f"[SOUND] Playing {state_text} sound: {sound_file}")
+
+        # Play sound in background thread using afplay (macOS native)
+        threading.Thread(
+            target=_play_sound_background, args=(sound_path,), daemon=True
+        ).start()
+
+    except Exception as e:
+        print(f"[SOUND] Error playing notification sound: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+
+def _play_sound_background(sound_path: str):
+    """Play sound in background using macOS afplay command"""
+    try:
+        result = subprocess.run(
+            ["afplay", sound_path],
+            capture_output=True,
+            text=True,
+            timeout=5,  # 5 second timeout
+        )
+        if result.returncode == 0:
+            print(f"[SOUND] Successfully played: {os.path.basename(sound_path)}")
+        else:
+            print(f"[SOUND] Failed to play: {result.stderr}")
+    except subprocess.TimeoutExpired:
+        print(f"[SOUND] Playback timeout: {os.path.basename(sound_path)}")
+    except Exception as e:
+        print(f"[SOUND] Background playback error: {e}")
 
 
 class NotificationManager:
@@ -109,6 +176,10 @@ class NotificationManager:
                 if subtitle
                 else message_with_emoji
             )
+
+            # Play notification sound based on state
+            if state is not None:
+                play_notification_sound(state)
 
             # Good/Bad buttons only for notification alerts with callbacks
             buttons = []

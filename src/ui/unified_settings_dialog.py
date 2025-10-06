@@ -18,15 +18,56 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QCheckBox,
     QSpinBox,
+    QApplication,
+    QRadioButton,
+    QButtonGroup,
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSize, QRect, QTimer
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen
 
 from ..config.api_config import (
     LLMProvider,
     get_api_config_manager,
     API_CONFIG,
 )
+
+
+class DisplayHighlightWindow(QWidget):
+    """Transparent window that shows a green border around a display"""
+
+    def __init__(self, screen_geometry: QRect):
+        super().__init__()
+        # Set window properties for overlay
+        self.setWindowFlags(
+            Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        # Set geometry to match the screen
+        self.setGeometry(screen_geometry)
+
+        # Border properties
+        self.border_width = 8
+        self.border_color = QColor(0, 255, 0)  # Green
+
+    def paintEvent(self, event):
+        """Draw the green border"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Create pen for border
+        pen = QPen(self.border_color)
+        pen.setWidth(self.border_width)
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        painter.setPen(pen)
+
+        # Draw rectangle border (inset by half border width)
+        offset = self.border_width // 2
+        rect = self.rect().adjusted(offset, offset, -offset, -offset)
+        painter.drawRect(rect)
 
 
 class UnifiedSettingsDialog(QDialog):
@@ -36,6 +77,7 @@ class UnifiedSettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.setMinimumSize(900, 600)
+        self.highlight_windows = []  # Store display highlight overlays
         self.setup_ui()
 
     def setup_ui(self):
@@ -149,6 +191,26 @@ class UnifiedSettingsDialog(QDialog):
                 border-top: 6px solid #cccccc;
                 margin-right: 10px;
             }
+            QComboBox QAbstractItemView {
+                background-color: #3c3c3c;
+                color: #ffffff;
+                selection-background-color: #007acc;
+                selection-color: #ffffff;
+                border: 1px solid #3e3e42;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 8px;
+                color: #ffffff;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #2a2d2e;
+                color: #ffffff;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #007acc;
+                color: #ffffff;
+            }
             QPushButton {
                 background-color: #0e639c;
                 color: white;
@@ -177,6 +239,27 @@ class UnifiedSettingsDialog(QDialog):
             QCheckBox::indicator:checked {
                 background-color: #007acc;
                 border-color: #007acc;
+            }
+            QRadioButton {
+                color: #cccccc;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 18px;
+                height: 18px;
+                border: 1px solid #3e3e42;
+                border-radius: 9px;
+                background-color: #3c3c3c;
+            }
+            QRadioButton::indicator:checked {
+                background-color: #007acc;
+                border-color: #007acc;
+            }
+            QRadioButton::indicator:checked:after {
+                width: 10px;
+                height: 10px;
+                border-radius: 5px;
+                background-color: white;
             }
             QSpinBox {
                 background-color: #3c3c3c;
@@ -353,6 +436,61 @@ class UnifiedSettingsDialog(QDialog):
         title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
         layout.addWidget(title)
 
+        # Screen capture selection group
+        capture_group = QGroupBox("Screen Capture")
+        capture_layout = QVBoxLayout()
+
+        capture_label = QLabel("Select which display to capture:")
+        capture_layout.addWidget(capture_label)
+
+        # Get available displays
+        screens = QApplication.screens()
+        api_manager = get_api_config_manager()
+        current_display = api_manager.get_selected_display()
+
+        # Create button group for radio buttons
+        self.display_button_group = QButtonGroup(page)
+        self.display_radios = []
+
+        for i, screen in enumerate(screens):
+            geometry = screen.geometry()
+            is_primary = i == 0
+
+            # Create display info
+            display_info = f"Display {i + 1}"
+            if is_primary:
+                display_info += " (Primary)"
+            display_info += f" - {geometry.width()}x{geometry.height()}"
+
+            # Create radio button
+            radio = QRadioButton(display_info)
+            radio.setChecked(i == current_display)
+            self.display_button_group.addButton(radio, i)
+            self.display_radios.append(radio)
+
+            # Create horizontal layout for radio + preview button
+            display_row = QHBoxLayout()
+            display_row.addWidget(radio)
+
+            # Add preview button
+            preview_btn = QPushButton("Preview")
+            preview_btn.setFixedWidth(100)
+            preview_btn.clicked.connect(
+                lambda checked, idx=i: self.preview_display(idx)
+            )
+            display_row.addWidget(preview_btn)
+            display_row.addStretch()
+
+            capture_layout.addLayout(display_row)
+
+        # Save button
+        save_btn = QPushButton("Save Display Selection")
+        save_btn.clicked.connect(self.save_display_selection)
+        capture_layout.addWidget(save_btn)
+
+        capture_group.setLayout(capture_layout)
+        layout.addWidget(capture_group)
+
         # Display settings group
         display_group = QGroupBox("Display Settings")
         display_layout = QVBoxLayout()
@@ -399,6 +537,90 @@ class UnifiedSettingsDialog(QDialog):
 
         notification_group.setLayout(notification_layout)
         layout.addWidget(notification_group)
+
+        # Sound settings group
+        sound_group = QGroupBox("Sound Settings")
+        sound_layout = QVBoxLayout()
+
+        # Sound enable/disable
+        api_manager = get_api_config_manager()
+        self.sound_enabled_checkbox = QCheckBox("Enable notification sounds")
+        self.sound_enabled_checkbox.setChecked(api_manager.get_sound_enabled())
+        self.sound_enabled_checkbox.stateChanged.connect(self.on_sound_enabled_changed)
+        sound_layout.addWidget(self.sound_enabled_checkbox)
+
+        # On-task sound selection
+        on_task_label = QLabel("Focus (On-task) Sound:")
+        sound_layout.addWidget(on_task_label)
+
+        on_task_row = QHBoxLayout()
+        self.on_task_combo = QComboBox()
+
+        # Get available on_task sound files
+        import os
+
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+        on_task_sounds = sorted(
+            [f for f in os.listdir(assets_dir) if f.startswith("on_task_")]
+        )
+
+        for sound in on_task_sounds:
+            self.on_task_combo.addItem(sound, sound)
+
+        # Set current selection
+        current_on_task = api_manager.get_on_task_sound()
+        index = self.on_task_combo.findData(current_on_task)
+        if index >= 0:
+            self.on_task_combo.setCurrentIndex(index)
+
+        on_task_row.addWidget(self.on_task_combo)
+
+        # Preview button
+        on_task_preview_btn = QPushButton("▶ Preview")
+        on_task_preview_btn.setFixedWidth(100)
+        on_task_preview_btn.clicked.connect(lambda: self.preview_sound("on_task"))
+        on_task_row.addWidget(on_task_preview_btn)
+
+        sound_layout.addLayout(on_task_row)
+
+        # Off-task sound selection
+        off_task_label = QLabel("Distracted (Off-task) Sound:")
+        sound_layout.addWidget(off_task_label)
+
+        off_task_row = QHBoxLayout()
+        self.off_task_combo = QComboBox()
+
+        # Get available off_task sound files
+        off_task_sounds = sorted(
+            [f for f in os.listdir(assets_dir) if f.startswith("off_task_")]
+        )
+
+        for sound in off_task_sounds:
+            self.off_task_combo.addItem(sound, sound)
+
+        # Set current selection
+        current_off_task = api_manager.get_off_task_sound()
+        index = self.off_task_combo.findData(current_off_task)
+        if index >= 0:
+            self.off_task_combo.setCurrentIndex(index)
+
+        off_task_row.addWidget(self.off_task_combo)
+
+        # Preview button
+        off_task_preview_btn = QPushButton("▶ Preview")
+        off_task_preview_btn.setFixedWidth(100)
+        off_task_preview_btn.clicked.connect(lambda: self.preview_sound("off_task"))
+        off_task_row.addWidget(off_task_preview_btn)
+
+        sound_layout.addLayout(off_task_row)
+
+        # Save button
+        save_sound_btn = QPushButton("Save Sound Settings")
+        save_sound_btn.clicked.connect(self.save_sound_settings)
+        sound_layout.addWidget(save_sound_btn)
+
+        sound_group.setLayout(sound_layout)
+        layout.addWidget(sound_group)
 
         layout.addStretch()
         return page
@@ -586,3 +808,120 @@ class UnifiedSettingsDialog(QDialog):
             except:
                 pass
             QMessageBox.critical(self, "Error", f"Failed to test API key:\n\n{str(e)}")
+
+    def preview_display(self, display_index: int):
+        """Show green border around the selected display"""
+        # Clear any existing highlights
+        self.clear_display_highlights()
+
+        # Get the screen geometry
+        screens = QApplication.screens()
+        if display_index < len(screens):
+            screen = screens[display_index]
+            geometry = screen.geometry()
+
+            # Create highlight window
+            highlight = DisplayHighlightWindow(geometry)
+            highlight.show()
+            self.highlight_windows.append(highlight)
+
+            print(f"[DISPLAY] Previewing display {display_index}: {geometry}")
+
+            # Auto-hide after 3 seconds
+            QTimer.singleShot(3000, self.clear_display_highlights)
+
+    def save_display_selection(self):
+        """Save the selected display"""
+        selected_id = self.display_button_group.checkedId()
+        if selected_id >= 0:
+            api_manager = get_api_config_manager()
+            api_manager.set_selected_display(selected_id)
+
+            # Clear highlights
+            self.clear_display_highlights()
+
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Display {selected_id + 1} selected for screen capture.\n\nRestart monitoring for changes to take effect.",
+            )
+            print(f"[DISPLAY] Saved display selection: {selected_id}")
+        else:
+            QMessageBox.warning(self, "Error", "Please select a display")
+
+    def clear_display_highlights(self):
+        """Remove all display highlight windows"""
+        for window in self.highlight_windows:
+            window.close()
+            window.deleteLater()
+        self.highlight_windows.clear()
+
+    def on_sound_enabled_changed(self, state):
+        """Handle sound enabled/disabled change"""
+        enabled = state == Qt.CheckState.Checked.value
+        api_manager = get_api_config_manager()
+        api_manager.set_sound_enabled(enabled)
+        print(f"[SOUND] Sound {'enabled' if enabled else 'disabled'}")
+
+    def preview_sound(self, sound_type: str):
+        """Preview the selected sound"""
+        import os
+        import subprocess
+        import threading
+
+        # Get selected sound file
+        if sound_type == "on_task":
+            sound_file = self.on_task_combo.currentData()
+        else:
+            sound_file = self.off_task_combo.currentData()
+
+        # Get assets directory
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+        sound_path = os.path.join(assets_dir, sound_file)
+
+        if not os.path.exists(sound_path):
+            QMessageBox.warning(self, "Error", f"Sound file not found: {sound_file}")
+            return
+
+        print(f"[SOUND] Previewing: {sound_path}")
+
+        # Play sound in background thread using afplay (macOS native)
+        def _play_preview():
+            try:
+                result = subprocess.run(
+                    ["afplay", sound_path], capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    print(f"[SOUND] Preview played successfully: {sound_file}")
+                else:
+                    print(f"[SOUND] Preview failed: {result.stderr}")
+            except Exception as e:
+                print(f"[SOUND] Preview error: {e}")
+
+        threading.Thread(target=_play_preview, daemon=True).start()
+
+    def save_sound_settings(self):
+        """Save sound settings"""
+        api_manager = get_api_config_manager()
+
+        # Get selected sounds
+        on_task_sound = self.on_task_combo.currentData()
+        off_task_sound = self.off_task_combo.currentData()
+
+        # Save to config
+        api_manager.set_on_task_sound(on_task_sound)
+        api_manager.set_off_task_sound(off_task_sound)
+
+        QMessageBox.information(
+            self,
+            "Success",
+            f"Sound settings saved!\n\nOn-task: {on_task_sound}\nOff-task: {off_task_sound}",
+        )
+        print(
+            f"[SOUND] Settings saved - On-task: {on_task_sound}, Off-task: {off_task_sound}"
+        )
+
+    def closeEvent(self, event):
+        """Handle dialog close - clean up highlights"""
+        self.clear_display_highlights()
+        super().closeEvent(event)

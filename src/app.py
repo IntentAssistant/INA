@@ -109,8 +109,10 @@ class IntentionalComputingApp(rumps.App):
         self._check_display_count()
         self.prompt_config = PromptConfig(self.storage)  # Pass storage to prompt_config
 
-        # Always use first display (primary)
-        selected_display = 0
+        # Load display selection from settings
+        api_manager = get_api_config_manager()
+        selected_display = api_manager.get_selected_display()
+        print(f"[APP] Loaded display selection from settings: {selected_display}")
 
         # Create ThreadManager first
         self.manager = ThreadManager(

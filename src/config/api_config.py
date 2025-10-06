@@ -150,6 +150,42 @@ class APIConfigManager:
         config["model"] = self.get_model(provider)
         return config
 
+    def set_selected_display(self, display_index: int):
+        """Set the selected display index"""
+        self._config["selected_display"] = display_index
+        self._save_config()
+
+    def get_selected_display(self) -> int:
+        """Get the selected display index (default: 0 for primary display)"""
+        return self._config.get("selected_display", 0)
+
+    def set_sound_enabled(self, enabled: bool):
+        """Set whether notification sounds are enabled"""
+        self._config["sound_enabled"] = enabled
+        self._save_config()
+
+    def get_sound_enabled(self) -> bool:
+        """Get whether notification sounds are enabled (default: True)"""
+        return self._config.get("sound_enabled", True)
+
+    def set_on_task_sound(self, sound_file: str):
+        """Set the sound file for on-task notifications"""
+        self._config["on_task_sound"] = sound_file
+        self._save_config()
+
+    def get_on_task_sound(self) -> str:
+        """Get the on-task sound file (default: on_task_1.mp3)"""
+        return self._config.get("on_task_sound", "on_task_1.mp3")
+
+    def set_off_task_sound(self, sound_file: str):
+        """Set the sound file for off-task notifications"""
+        self._config["off_task_sound"] = sound_file
+        self._save_config()
+
+    def get_off_task_sound(self) -> str:
+        """Get the off-task sound file (default: off_task_1.mp3)"""
+        return self._config.get("off_task_sound", "off_task_1.mp3")
+
 
 # Global instance
 _api_config_manager = None
