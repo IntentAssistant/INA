@@ -73,11 +73,12 @@ class DisplayHighlightWindow(QWidget):
 class UnifiedSettingsDialog(QDialog):
     """Unified settings dialog with sidebar navigation"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, app=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.setMinimumSize(900, 600)
         self.highlight_windows = []  # Store display highlight overlays
+        self.app = app  # Store reference to main app for real-time updates
         self.setup_ui()
 
     def setup_ui(self):
@@ -287,8 +288,8 @@ class UnifiedSettingsDialog(QDialog):
         info_group = QGroupBox("Application Information")
         info_layout = QVBoxLayout()
 
-        app_name_label = QLabel("App Name: AIM (Aligned Intention Monitoring)")
-        app_version_label = QLabel("Version: 1.0.1")
+        app_name_label = QLabel("App Name: INA (Intent Assistant)")
+        app_version_label = QLabel("Version: 0.5.0")
         app_description = QLabel("AI-powered focus management application for macOS")
         app_description.setWordWrap(True)
 
@@ -297,6 +298,25 @@ class UnifiedSettingsDialog(QDialog):
         info_layout.addWidget(app_description)
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
+
+        # Window behavior group
+        window_group = QGroupBox("Window Behavior")
+        window_layout = QVBoxLayout()
+
+        api_manager = get_api_config_manager()
+        self.float_on_top_checkbox = QCheckBox("Float on top")
+        self.float_on_top_checkbox.setChecked(api_manager.get_float_on_top())
+        self.float_on_top_checkbox.stateChanged.connect(self.on_float_on_top_changed)
+        window_layout.addWidget(self.float_on_top_checkbox)
+
+        float_info = QLabel(
+            "When enabled, the dashboard will always stay on top of other windows"
+        )
+        float_info.setStyleSheet("color: #888888;")
+        window_layout.addWidget(float_info)
+
+        window_group.setLayout(window_layout)
+        layout.addWidget(window_group)
 
         layout.addStretch()
         return page
@@ -847,14 +867,45 @@ class UnifiedSettingsDialog(QDialog):
             api_manager = get_api_config_manager()
             api_manager.set_selected_display(selected_id)
 
+            # Apply to running app immediately if available
+            applied = False
+
+            # Try to update via app reference
+            if self.app and hasattr(self.app, "manager"):
+                self.app.manager.selected_display = selected_id
+                print(
+                    f"[DISPLAY] Applied display {selected_id} to running manager (via app)"
+                )
+                applied = True
+
+            # Try to update via parent (Dashboard)
+            if (
+                not applied
+                and self.parent()
+                and hasattr(self.parent(), "thread_manager")
+            ):
+                self.parent().thread_manager.selected_display = selected_id
+                print(
+                    f"[DISPLAY] Applied display {selected_id} to running manager (via dashboard)"
+                )
+                applied = True
+
             # Clear highlights
             self.clear_display_highlights()
 
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Display {selected_id + 1} selected for screen capture.\n\nRestart monitoring for changes to take effect.",
-            )
+            if applied:
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Display {selected_id + 1} selected for screen capture.\n\nSettings applied immediately!",
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Display {selected_id + 1} selected for screen capture.\n\nSettings will apply on next start.",
+                )
+
             print(f"[DISPLAY] Saved display selection: {selected_id}")
         else:
             QMessageBox.warning(self, "Error", "Please select a display")
@@ -865,6 +916,28 @@ class UnifiedSettingsDialog(QDialog):
             window.close()
             window.deleteLater()
         self.highlight_windows.clear()
+
+    def on_float_on_top_changed(self, state):
+        """Handle float on top setting change"""
+        enabled = state == Qt.CheckState.Checked.value
+        api_manager = get_api_config_manager()
+        api_manager.set_float_on_top(enabled)
+        print(f"[FLOAT] Float on top {'enabled' if enabled else 'disabled'}")
+
+        # Apply to dashboard immediately if available
+        applied = False
+
+        # Try to update via app reference
+        if self.app and hasattr(self.app, "dashboard"):
+            self.app.dashboard.set_float_on_top(enabled)
+            print(f"[FLOAT] Applied float on top setting to dashboard (via app)")
+            applied = True
+
+        # Try to update via parent (Dashboard)
+        if not applied and self.parent() and hasattr(self.parent(), "set_float_on_top"):
+            self.parent().set_float_on_top(enabled)
+            print(f"[FLOAT] Applied float on top setting to dashboard (via parent)")
+            applied = True
 
     def on_notification_enabled_changed(self, state):
         """Handle notification enabled/disabled change"""

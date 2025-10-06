@@ -47,9 +47,18 @@ class WindowManager:
         self.windows = {}
         self.opacity_effects = {}
         self.animation_groups = {}
+        self.float_on_top = (
+            True  # Default value, will be updated when windows are created
+        )
 
     def create_all_windows(self):
         """Create all popup windows"""
+        # Load float on top setting
+        from ..config.api_config import get_api_config_manager
+
+        api_manager = get_api_config_manager()
+        self.float_on_top = api_manager.get_float_on_top()
+
         self.create_history_window()
         self.create_clarification_window()
         self.create_starting_soon_window()
@@ -57,15 +66,18 @@ class WindowManager:
         self.create_rating_window()
         self.create_feedback_window()
 
+    def get_window_flags(self):
+        """Get window flags based on float on top setting"""
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
+        if self.float_on_top:
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        return flags
+
     def create_history_window(self):
         """Create the history window that appears below the main dashboard"""
         # Create history window as separate widget
         history_window = QWidget()
-        history_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        history_window.setWindowFlags(self.get_window_flags())
         history_window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         history_window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         history_window.setFixedSize(DASHBOARD_WIDTH, 200)
@@ -140,11 +152,7 @@ class WindowManager:
     def create_clarification_window(self):
         """Create clarification window for LLM chat"""
         clarification_window = QWidget()
-        clarification_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        clarification_window.setWindowFlags(self.get_window_flags())
         clarification_window.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
@@ -294,11 +302,7 @@ class WindowManager:
     def create_starting_soon_window(self):
         """Create starting soon window"""
         starting_soon_window = QWidget()
-        starting_soon_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        starting_soon_window.setWindowFlags(self.get_window_flags())
         starting_soon_window.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
@@ -354,11 +358,7 @@ class WindowManager:
     def create_llm_response_window(self):
         """Create LLM response window without feedback buttons"""
         llm_response_window = QWidget()
-        llm_response_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        llm_response_window.setWindowFlags(self.get_window_flags())
         llm_response_window.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
@@ -471,11 +471,7 @@ class WindowManager:
     def create_feedback_window(self):
         """Create separate feedback window with O/X buttons"""
         feedback_window = QWidget()
-        feedback_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        feedback_window.setWindowFlags(self.get_window_flags())
         feedback_window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         feedback_window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         feedback_window.setFixedSize(400, 90)  # Start small
@@ -625,11 +621,7 @@ class WindowManager:
     def create_rating_window(self):
         """Create session rating window with percentage-based progress bar and emojis above"""
         rating_window = QWidget()
-        rating_window.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+        rating_window.setWindowFlags(self.get_window_flags())
         rating_window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         rating_window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         rating_window.setFixedSize(
@@ -1043,3 +1035,35 @@ class WindowManager:
 
         except Exception as e:
             print(f"[WINDOW_MANAGER] Error in cleanup: {e}")
+
+    def set_all_windows_float_on_top(self, enabled: bool):
+        """Update float on top setting for all windows"""
+        self.float_on_top = enabled
+
+        # Update flags for all existing windows
+        window_names = [
+            "history_window",
+            "clarification_window",
+            "starting_soon_window",
+            "llm_response_window",
+            "feedback_window",
+            "rating_window",
+        ]
+
+        for window_name in window_names:
+            if window_name in self.windows:
+                window = self.windows[window_name]
+                if window:
+                    # Get current flags
+                    was_visible = window.isVisible()
+
+                    # Set new flags
+                    window.setWindowFlags(self.get_window_flags())
+
+                    # Re-show if was visible (required after setWindowFlags)
+                    if was_visible:
+                        window.show()
+
+        print(
+            f"[WINDOW_MANAGER] Updated all windows float on top: {'enabled' if enabled else 'disabled'}"
+        )

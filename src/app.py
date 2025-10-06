@@ -440,7 +440,7 @@ class IntentionalComputingApp(rumps.App):
         """Handle API settings menu click"""
         from .ui.unified_settings_dialog import UnifiedSettingsDialog
 
-        dialog = UnifiedSettingsDialog()
+        dialog = UnifiedSettingsDialog(app=self)
         dialog.exec()
 
     # Display Settings menu removed - single display auto-selection

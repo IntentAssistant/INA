@@ -195,6 +195,15 @@ class APIConfigManager:
         """Get whether notifications are enabled (default: True)"""
         return self._config.get("notification_enabled", True)
 
+    def set_float_on_top(self, enabled: bool):
+        """Set whether dashboard floats on top"""
+        self._config["float_on_top"] = enabled
+        self._save_config()
+
+    def get_float_on_top(self) -> bool:
+        """Get whether dashboard floats on top (default: True)"""
+        return self._config.get("float_on_top", True)
+
 
 # Global instance
 _api_config_manager = None

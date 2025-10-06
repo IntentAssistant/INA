@@ -1,5 +1,5 @@
 # App Version - Change this when releasing a new version
-APP_VERSION = "1.0.1"
+APP_VERSION = "0.5.0"
 
 # API Settings - Direct LLM Integration
 # Configure API keys via the UI (Settings > User Settings > Configure API Settings)
@@ -15,8 +15,8 @@ USER_CONFIG_FILE = "user_config.json"
 PROMPT_CONFIG_FILE = "prompt_config.json"
 
 # Sound Settings
-DEFAULT_FOCUS_SOUND = "good_1.mp3"  # For focused state (0) - focused
-DEFAULT_DISTRACT_SOUND = "focus_1.mp3"  # For distracted state (1) - distracted
+DEFAULT_FOCUS_SOUND = "on_task_1.mp3"  # For focused state (0) - focused
+DEFAULT_DISTRACT_SOUND = "off_tast_1.mp3"  # For distracted state (1) - distracted
 
 # Capture Settings
 CAPTURE_INTERVAL = 2
@@ -28,8 +28,8 @@ IMAGE_SCALE = (
 # LLM Settings
 
 LLM_INVOKE_INTERVAL = 2
-LLM_ANALYSIS_IMAGE_COUNT = 1  # Always analyze only 1 image (most recent)
 LLM_INTERVAL = 2
+LLM_ANALYSIS_IMAGE_COUNT = 1  # Always analyze only 1 image (most recent)
 MAX_CONCURRENT_ANALYSIS_THREADS = 4  # Maximum number of concurrent LLM analysis threads
 
 

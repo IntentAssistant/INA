@@ -270,11 +270,19 @@ class Dashboard(QWidget):
 
         # Basic window settings
         self.setWindowTitle(APP_TITLE)
-        self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
+
+        # Load float on top setting
+        from ..config.api_config import get_api_config_manager
+
+        api_manager = get_api_config_manager()
+        float_on_top = api_manager.get_float_on_top()
+
+        # Set window flags based on setting
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
+        if float_on_top:
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+
+        self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         # Set window size
         self.setFixedWidth(DASHBOARD_WIDTH)
@@ -3140,7 +3148,32 @@ class Dashboard(QWidget):
                 ):
                     self.progress_bar.refresh_language()
 
-        print("[LANGUAGE] Dashboard UI language refresh complete")
+    def set_float_on_top(self, enabled: bool):
+        """Set whether the dashboard floats on top of other windows"""
+        # Get current flags
+        current_flags = self.windowFlags()
+
+        # Create new flags
+        if enabled:
+            # Add WindowStaysOnTopHint
+            new_flags = current_flags | Qt.WindowType.WindowStaysOnTopHint
+        else:
+            # Remove WindowStaysOnTopHint
+            new_flags = current_flags & ~Qt.WindowType.WindowStaysOnTopHint
+
+        # Apply new flags
+        was_visible = self.isVisible()
+        self.setWindowFlags(new_flags)
+
+        # Re-show the window if it was visible (required after setWindowFlags)
+        if was_visible:
+            self.show()
+
+        # Update all popup windows (history, feedback, etc.)
+        if hasattr(self, "window_manager") and self.window_manager:
+            self.window_manager.set_all_windows_float_on_top(enabled)
+
+        print(f"[DASHBOARD] Float on top: {'enabled' if enabled else 'disabled'}")
 
     def get_dashboard_position(self):
         """Get simple x,y position of dashboard for image analysis"""
