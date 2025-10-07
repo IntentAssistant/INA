@@ -3166,8 +3166,3 @@ class Dashboard(QWidget):
         # Update all popup windows (history, feedback, etc.)
         if hasattr(self, "window_manager") and self.window_manager:
             self.window_manager.set_all_windows_float_on_top(enabled)
-
-    def get_dashboard_position(self):
-        """Get simple x,y position of dashboard for image analysis"""
-        pos = self.pos()
-        return {"x": pos.x(), "y": pos.y()}

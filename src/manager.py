@@ -262,15 +262,16 @@ class ThreadManager(QObject):
                 except Exception as e:
                     print(f"Error removing recording indicator: {e}")
 
-            # Clean up analysis threads
+            # Clean up analysis threads - OPTIMIZED: parallel termination
             print("Preparing thread cleanup...")
             thread_count = len(self.analysis_threads)
             if thread_count > 0:
                 print(f"Cleaning up {thread_count} analysis threads...")
+
+                # Step 1: Send stop signal to ALL threads at once
                 for thread_id, thread in list(self.analysis_threads.items()):
                     try:
                         if thread and thread.isRunning():
-                            print(f"Requesting thread {thread_id} to stop...")
                             # Set stopping flag if available
                             if hasattr(thread, "_is_stopping"):
                                 thread._is_stopping = True
@@ -290,21 +291,25 @@ class ThreadManager(QObject):
                                 thread.safe_quit()
                             else:
                                 thread.terminate()
+                            print(f"Requested thread {thread_id} to stop")
+                    except Exception as e:
+                        print(f"Error sending stop signal to {thread_id}: {e}")
 
-                            # Use longer timeout (2s) for proper cleanup
-                            if not thread.wait(2000):
-                                print(
-                                    f"Thread {thread_id} did not stop in time, but continuing cleanup"
-                                )
+                # Step 2: Wait for ALL threads (they stop in parallel, max 1 sec total)
+                for thread_id, thread in list(self.analysis_threads.items()):
+                    try:
+                        if thread and thread.isRunning():
+                            if not thread.wait(1000):  # Reduced to 1 second
+                                print(f"Thread {thread_id} timeout")
                             else:
-                                print(f"Thread {thread_id} stopped successfully")
+                                print(f"Thread {thread_id} stopped")
 
                         try:
                             thread.deleteLater()
                         except Exception as e:
                             print(f"Error deleting thread {thread_id}: {e}")
                     except Exception as e:
-                        print(f"Error stopping thread {thread_id}: {e}")
+                        print(f"Error in thread {thread_id}: {e}")
 
                 # Clear dictionary after processing all threads
                 self.analysis_threads.clear()
@@ -556,19 +561,6 @@ class ThreadManager(QObject):
                 print(f"[ANALYSIS] Dashboard opacity: {self.dashboard.current_opacity}")
             else:
                 user_info["opacity"] = 1.0  # Default opacity if not available
-
-            # Add dashboard position information for image analysis
-            if self.dashboard and hasattr(self.dashboard, "get_dashboard_position"):
-                dashboard_position = self.dashboard.get_dashboard_position()
-                user_info["dashboard_position"] = dashboard_position
-                print(
-                    f"[ANALYSIS] Dashboard position: x={dashboard_position['x']}, y={dashboard_position['y']}"
-                )
-            else:
-                user_info["dashboard_position"] = {
-                    "x": 0,
-                    "y": 0,
-                }  # Default position if not available
 
             # Get formatted prompt with frontmost app context
             prompt = self.get_formatted_prompt(frontmost_app_info)
@@ -1085,12 +1077,6 @@ class ThreadManager(QObject):
                     if self.dashboard
                     else 1.0
                 ),  # Dashboard opacity
-                "dashboard_position": (
-                    self.dashboard.get_dashboard_position()
-                    if self.dashboard
-                    and hasattr(self.dashboard, "get_dashboard_position")
-                    else {"x": 0, "y": 0}
-                ),  # Dashboard position
             }
 
             print(f"  - name: {user_info['name']}")
@@ -1101,7 +1087,6 @@ class ThreadManager(QObject):
             print(f"  - image_num: {user_info['image_num']}")
             print(f"  - app_change: {user_info['app_change']}")
             print(f"  - opacity: {user_info['opacity']}")
-            print(f"  - dashboard_position: {user_info['dashboard_position']}")
 
             thread = LLMAnalysisThread(
                 prompt,

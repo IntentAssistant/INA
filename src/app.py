@@ -570,15 +570,6 @@ class IntentionalComputingApp(rumps.App):
                 # Handle state transitions for subsequent messages
                 state_changed = self._handle_state_transition(output)
 
-                if state_changed or self.message_update_flag > 5:
-                    print(f"[UI] Update intention level on dashboard")
-                    self.dashboard.update_intention_level(
-                        level=self.current_state,
-                        message=current_message,
-                        raw_value=output_raw,
-                    )
-                    self.message_update_flag = 0
-
                 # Update dashboard and show notification only on state change
                 if state_changed:
                     # Start sound playback first (async)
@@ -631,6 +622,25 @@ class IntentionalComputingApp(rumps.App):
                         notification_context=context_data,
                     )
                     self.current_message = current_message
+
+                    # Update message on dashboard immediately after notification
+                    print(f"[UI] Update intention level on dashboard")
+                    self.dashboard.update_intention_level(
+                        level=self.current_state,
+                        message=current_message,
+                        raw_value=output_raw,
+                    )
+                    self.message_update_flag = 0
+
+                # Update message periodically even without state change (every 5+ messages)
+                elif self.message_update_flag > 5:
+                    print(f"[UI] Update message (periodic update)")
+                    self.dashboard.update_intention_level(
+                        level=self.current_state,
+                        message=current_message,
+                        raw_value=output_raw,
+                    )
+                    self.message_update_flag = 0
 
             # Handle focus reminders
             self._handle_focus_reminders(output, current_message)
