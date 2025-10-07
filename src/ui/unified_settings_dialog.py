@@ -921,34 +921,14 @@ class UnifiedSettingsDialog(QDialog):
         enabled = state == Qt.CheckState.Checked.value
         api_manager = get_api_config_manager()
         api_manager.set_float_on_top(enabled)
-        print(
-            f"[FLOAT] Float on top {'enabled' if enabled else 'disabled'} - saving to config"
-        )
 
         # Apply to dashboard immediately if available
-        applied = False
-
         # Try to update via app reference
         if self.app and hasattr(self.app, "dashboard"):
-            print(f"[FLOAT] Updating dashboard via app reference...")
             self.app.dashboard.set_float_on_top(enabled)
-            print(f"[FLOAT] Applied float on top setting to dashboard (via app)")
-            applied = True
-
         # Try to update via parent (Dashboard)
-        if not applied and self.parent() and hasattr(self.parent(), "set_float_on_top"):
-            print(f"[FLOAT] Updating dashboard via parent reference...")
+        elif self.parent() and hasattr(self.parent(), "set_float_on_top"):
             self.parent().set_float_on_top(enabled)
-            print(f"[FLOAT] Applied float on top setting to dashboard (via parent)")
-            applied = True
-
-        if not applied:
-            print(
-                f"[FLOAT] Warning: Could not find dashboard to apply setting immediately"
-            )
-            print(f"[FLOAT] Setting saved - will be applied on next app start")
-        else:
-            print(f"[FLOAT] Setting applied immediately to all windows")
 
     def on_notification_enabled_changed(self, state):
         """Handle notification enabled/disabled change"""

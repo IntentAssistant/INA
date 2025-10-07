@@ -3140,8 +3140,6 @@ class Dashboard(QWidget):
 
     def set_float_on_top(self, enabled: bool):
         """Set whether the dashboard floats on top of other windows"""
-        print(f"[FLOAT] Applying float on top to dashboard: {enabled}")
-
         # Get current flags and geometry
         current_flags = self.windowFlags()
         current_geometry = self.geometry()
@@ -3164,15 +3162,10 @@ class Dashboard(QWidget):
         # Re-show the window if it was visible (required after setWindowFlags)
         if was_visible:
             self.show()
-            print(f"[FLOAT] Dashboard updated and shown with float on top: {enabled}")
-        else:
-            print(f"[FLOAT] Dashboard updated (hidden) with float on top: {enabled}")
 
         # Update all popup windows (history, feedback, etc.)
         if hasattr(self, "window_manager") and self.window_manager:
             self.window_manager.set_all_windows_float_on_top(enabled)
-
-        print(f"[FLOAT] Float on top setting fully applied")
 
     def get_dashboard_position(self):
         """Get simple x,y position of dashboard for image analysis"""

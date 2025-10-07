@@ -1039,8 +1039,6 @@ class WindowManager:
 
     def set_all_windows_float_on_top(self, enabled: bool):
         """Update float on top setting for all windows"""
-        print(f"[FLOAT] Updating all windows float on top: {enabled}")
-
         # Update flags for all existing windows
         # Note: These keys match the actual keys used in self.windows dictionary
         window_names = [
@@ -1052,7 +1050,6 @@ class WindowManager:
             "rating",
         ]
 
-        updated_count = 0
         for window_name in window_names:
             if window_name in self.windows:
                 window = self.windows[window_name]
@@ -1079,10 +1076,3 @@ class WindowManager:
                     # Re-show if was visible (required after setWindowFlags)
                     if was_visible:
                         window.show()
-                        print(f"[FLOAT] Updated visible window: {window_name}")
-                    else:
-                        print(f"[FLOAT] Updated hidden window: {window_name}")
-
-                    updated_count += 1
-
-        print(f"[FLOAT] Successfully updated {updated_count} windows")
