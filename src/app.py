@@ -297,8 +297,8 @@ class IntentionalComputingApp(rumps.App):
         self.message_update_flag = 0
         self.consecutive_focus_count = 0
         self.focus_notification_threshold = 15
-        self.acquire_threshold = 1  # Changed to 1 for immediate response
-        self.release_threshold = 1  # Changed to 1 for immediate response
+        self.acquire_threshold = 2  # Need 2 consecutive to change to distracted
+        self.release_threshold = 2  # Need 2 consecutive to change to focused
         self.current_state = 0
         self.consecutive_ones = 0
         self.consecutive_zeros = 0
@@ -495,13 +495,11 @@ class IntentionalComputingApp(rumps.App):
                 )
                 print(f"[FEEDBACK] Stored LLM response for potential feedback")
 
-            # Update consecutive counters
+            # Update consecutive counters (more robust against noise)
             if output == 1:  # Distracted state
                 self.consecutive_ones += 1
-                self.consecutive_zeros = 0
             elif output == 0:  # Focused state
                 self.consecutive_zeros += 1
-                self.consecutive_ones = 0
             # output == 2 (uncertain): don't update counters, maintain current state
 
             # Check if this is the first message
@@ -657,6 +655,7 @@ class IntentionalComputingApp(rumps.App):
         # Transition to distracted state when consecutive ones reach threshold
         if self.current_state == 0 and self.consecutive_ones >= self.acquire_threshold:
             self.current_state = 1
+            self.consecutive_zeros = 0  # Reset counter on state change
             print(
                 f"[STATE] Changed to DISTRACTED (consecutive: {self.consecutive_ones}/{self.acquire_threshold})"
             )
@@ -666,6 +665,7 @@ class IntentionalComputingApp(rumps.App):
             self.current_state == 1 and self.consecutive_zeros >= self.release_threshold
         ):
             self.current_state = 0
+            self.consecutive_ones = 0  # Reset counter on state change
             self.consecutive_focus_count = 1
             print(
                 f"[STATE] Changed to FOCUSED (consecutive: {self.consecutive_zeros}/{self.release_threshold})"
