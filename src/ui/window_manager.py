@@ -27,7 +27,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QFont
 from AppKit import NSWindowSharingNone
-from .percentage_progress_bar import PercentageProgressBar
+from .percentage_progress_bar import CheckboxRatingWidget
 
 # Animation Constants
 ANIMATION_SHOW_DURATION = 300  # Show animation duration in ms
@@ -47,18 +47,9 @@ class WindowManager:
         self.windows = {}
         self.opacity_effects = {}
         self.animation_groups = {}
-        self.float_on_top = (
-            True  # Default value, will be updated when windows are created
-        )
 
     def create_all_windows(self):
         """Create all popup windows"""
-        # Load float on top setting
-        from ..config.api_config import get_api_config_manager
-
-        api_manager = get_api_config_manager()
-        self.float_on_top = api_manager.get_float_on_top()
-
         self.create_history_window()
         self.create_clarification_window()
         self.create_starting_soon_window()
@@ -68,8 +59,13 @@ class WindowManager:
 
     def get_window_flags(self):
         """Get window flags based on float on top setting"""
+        from ..config.api_config import get_api_config_manager
+
+        api_manager = get_api_config_manager()
+        current_float_on_top = api_manager.get_float_on_top()
+
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
-        if self.float_on_top:
+        if current_float_on_top:
             flags |= Qt.WindowType.WindowStaysOnTopHint
         return flags
 
@@ -655,7 +651,7 @@ class WindowManager:
         rating_options_layout.setSpacing(0)
 
         # Create custom checkbox rating widget
-        rating_widget = PercentageProgressBar()  # Using legacy name for compatibility
+        rating_widget = CheckboxRatingWidget()
         rating_widget.setFixedHeight(240)  # Height for 5 checkbox options
         rating_widget.value_changed.connect(self.dashboard.set_rating)
         rating_options_layout.addWidget(rating_widget)
@@ -729,6 +725,11 @@ class WindowManager:
         # Start position (slightly above final position for slide effect)
         start_y = final_pos.y() - slide_offset
         window.move(final_pos.x(), start_y)
+
+        # Update window flags to match current settings before showing
+        # This ensures the window respects any setting changes made while it was hidden
+        current_flags = self.get_window_flags()
+        window.setWindowFlags(current_flags)
 
         # Show the window
         window.show()
@@ -1038,32 +1039,50 @@ class WindowManager:
 
     def set_all_windows_float_on_top(self, enabled: bool):
         """Update float on top setting for all windows"""
-        self.float_on_top = enabled
+        print(f"[FLOAT] Updating all windows float on top: {enabled}")
 
         # Update flags for all existing windows
+        # Note: These keys match the actual keys used in self.windows dictionary
         window_names = [
-            "history_window",
-            "clarification_window",
-            "starting_soon_window",
-            "llm_response_window",
-            "feedback_window",
-            "rating_window",
+            "history",
+            "clarification",
+            "starting_soon",
+            "llm_response",
+            "feedback",
+            "rating",
         ]
 
+        updated_count = 0
         for window_name in window_names:
             if window_name in self.windows:
                 window = self.windows[window_name]
                 if window:
-                    # Get current flags
+                    # Get current visibility state and geometry
                     was_visible = window.isVisible()
+                    current_geometry = window.geometry()
 
-                    # Set new flags
-                    window.setWindowFlags(self.get_window_flags())
+                    # Get current flags and update
+                    current_flags = window.windowFlags()
+
+                    # Remove or add WindowStaysOnTopHint based on enabled
+                    if enabled:
+                        new_flags = current_flags | Qt.WindowType.WindowStaysOnTopHint
+                    else:
+                        new_flags = current_flags & ~Qt.WindowType.WindowStaysOnTopHint
+
+                    # Apply new flags
+                    window.setWindowFlags(new_flags)
+
+                    # Restore geometry (setWindowFlags can reset position)
+                    window.setGeometry(current_geometry)
 
                     # Re-show if was visible (required after setWindowFlags)
                     if was_visible:
                         window.show()
+                        print(f"[FLOAT] Updated visible window: {window_name}")
+                    else:
+                        print(f"[FLOAT] Updated hidden window: {window_name}")
 
-        print(
-            f"[WINDOW_MANAGER] Updated all windows float on top: {'enabled' if enabled else 'disabled'}"
-        )
+                    updated_count += 1
+
+        print(f"[FLOAT] Successfully updated {updated_count} windows")

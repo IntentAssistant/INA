@@ -374,17 +374,6 @@ def get_api_config_manager() -> APIConfigManager:
     return _api_config_manager
 
 
-# Legacy functions for backward compatibility
-def get_api_key(provider: LLMProvider) -> str:
-    """Get API key from configuration manager"""
-    return get_api_config_manager().get_api_key(provider)
-
-
-def get_model_config(provider: LLMProvider) -> dict:
-    """Get model configuration for the specified provider"""
-    return get_api_config_manager().get_model_config(provider)
-
-
 def is_api_configured(provider: LLMProvider) -> bool:
     """Check if API is properly configured"""
     return get_api_config_manager().is_api_configured(provider)

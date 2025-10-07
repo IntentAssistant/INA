@@ -1,10 +1,7 @@
 import os
 import sys
 import rumps
-import random
 import logging
-import subprocess
-import threading
 import time
 import regex as re
 

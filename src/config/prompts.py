@@ -391,14 +391,3 @@ def format_reflection_prompt(stated_intention, assistant_response, user_feedback
         assistant_response=assistant_response,
         user_feedback=user_feedback,
     )
-
-
-# Legacy function for backward compatibility
-def get_intention_analysis_prompt():
-    """Get the basic intention analysis prompt (legacy)"""
-    return build_intention_analysis_prompt()
-
-
-def format_intention_prompt(task_name="No task specified"):
-    """Format the intention analysis prompt with task name (legacy)"""
-    return build_intention_analysis_prompt(task_name=task_name)

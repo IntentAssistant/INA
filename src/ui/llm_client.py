@@ -227,13 +227,7 @@ class ClarificationThread(QThread):
 
             # Prepare context for clarification
             context = {
-                "user_id": (
-                    getattr(self.dashboard, "user_config", {})
-                    .get_user_info()
-                    .get("name", "default_user")
-                    if self.dashboard and hasattr(self.dashboard, "user_config")
-                    else "default_user"
-                ),
+                "user_id": "local_user",
                 "session_id": (
                     getattr(
                         self.dashboard,
@@ -253,13 +247,7 @@ class ClarificationThread(QThread):
                     if self.dashboard
                     else "Clarification chat"
                 ),
-                "device_name": (
-                    getattr(self.dashboard, "user_config", {})
-                    .get_user_info()
-                    .get("device_name", "mac_os_device")
-                    if self.dashboard and hasattr(self.dashboard, "user_config")
-                    else "mac_os_device"
-                ),
+                "device_name": "mac_os_device",
             }
 
             # Get clarification question using direct LLM API
@@ -329,7 +317,7 @@ class LLMClient:
 
         # Connect signals
         self.clarification_thread.response_received.connect(
-            self.dashboard.on_clarification_response_received
+            self.dashboard.on_clarification_question_received
         )
         self.clarification_thread.error_occurred.connect(
             self.dashboard.on_clarification_error

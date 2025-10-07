@@ -8,8 +8,6 @@ import os
 import json
 from .prompts import (
     build_intention_analysis_prompt,
-    get_intention_analysis_prompt,
-    format_intention_prompt,
 )
 from datetime import datetime
 
@@ -20,12 +18,12 @@ class PromptConfig:
         self.storage = storage  # Store reference to storage for loading reflections
 
     def get_prompt(self):
-        """Get the basic intention analysis prompt (legacy)"""
-        return get_intention_analysis_prompt()
+        """Get the basic intention analysis prompt"""
+        return build_intention_analysis_prompt()
 
     def get_formatted_prompt(self, task_name="No task specified"):
-        """Get formatted prompt with task name (legacy)"""
-        return format_intention_prompt(task_name)
+        """Get formatted prompt with task name"""
+        return build_intention_analysis_prompt(task_name=task_name)
 
     def get_advanced_prompt(
         self,

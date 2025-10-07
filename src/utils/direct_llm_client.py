@@ -16,8 +16,6 @@ from google import genai
 from ..config.api_config import (
     LLMProvider,
     DEFAULT_LLM_PROVIDER,
-    get_api_key,
-    get_model_config,
     is_api_configured,
     get_api_config_manager,
     IMAGE_CONFIG,
@@ -31,8 +29,9 @@ class DirectLLMClient:
         self, provider: LLMProvider = DEFAULT_LLM_PROVIDER, model: Optional[str] = None
     ):
         self.provider = provider
-        self.config = get_model_config(provider)
-        self.api_key = get_api_key(provider)
+        api_manager = get_api_config_manager()
+        self.config = api_manager.get_model_config(provider)
+        self.api_key = api_manager.get_api_key(provider)
 
         # Override model if provided
         if model:

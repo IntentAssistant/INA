@@ -194,11 +194,3 @@ class CheckboxRatingWidget(QWidget):
         """Handle mouse release - prevent dragging"""
         # Prevent event propagation to parent to avoid window dragging
         event.accept()
-
-
-# Keep the old class for backward compatibility, but redirect to new one
-class PercentageProgressBar(CheckboxRatingWidget):
-    """Legacy class that redirects to CheckboxRatingWidget for backward compatibility"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)

@@ -11,7 +11,6 @@ APP_VERSION = "0.5.0"
 # Only configuration and session data are stored
 DEFAULT_STORAGE_DIR = "~/AIM_Data"
 CONFIG_DIR = "~/.intention_app"
-USER_CONFIG_FILE = "user_config.json"
 PROMPT_CONFIG_FILE = "prompt_config.json"
 
 # Sound Settings

@@ -2254,16 +2254,6 @@ class Dashboard(QWidget):
                 return conv["text"]
         return ""
 
-    def on_initial_clarification_received(self, response):
-        """Handle initial clarification response from LLM (deprecated)"""
-        # Redirect to new method
-        self.on_clarification_question_received(response)
-
-    def on_clarification_response_received(self, response):
-        """Handle clarification response from LLM for user messages (deprecated)"""
-        # Redirect to new method
-        self.on_clarification_question_received(response)
-
     def on_clarification_error(self, error_message):
         """Handle clarification API error"""
         print(f"[CLARIFICATION] Error: {error_message}")
@@ -3150,8 +3140,11 @@ class Dashboard(QWidget):
 
     def set_float_on_top(self, enabled: bool):
         """Set whether the dashboard floats on top of other windows"""
-        # Get current flags
+        print(f"[FLOAT] Applying float on top to dashboard: {enabled}")
+
+        # Get current flags and geometry
         current_flags = self.windowFlags()
+        current_geometry = self.geometry()
 
         # Create new flags
         if enabled:
@@ -3165,15 +3158,21 @@ class Dashboard(QWidget):
         was_visible = self.isVisible()
         self.setWindowFlags(new_flags)
 
+        # Restore geometry (setWindowFlags can reset position)
+        self.setGeometry(current_geometry)
+
         # Re-show the window if it was visible (required after setWindowFlags)
         if was_visible:
             self.show()
+            print(f"[FLOAT] Dashboard updated and shown with float on top: {enabled}")
+        else:
+            print(f"[FLOAT] Dashboard updated (hidden) with float on top: {enabled}")
 
         # Update all popup windows (history, feedback, etc.)
         if hasattr(self, "window_manager") and self.window_manager:
             self.window_manager.set_all_windows_float_on_top(enabled)
 
-        print(f"[DASHBOARD] Float on top: {'enabled' if enabled else 'disabled'}")
+        print(f"[FLOAT] Float on top setting fully applied")
 
     def get_dashboard_position(self):
         """Get simple x,y position of dashboard for image analysis"""
