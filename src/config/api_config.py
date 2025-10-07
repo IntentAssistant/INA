@@ -219,9 +219,14 @@ def fetch_available_gemini_models(api_key: str) -> Dict[str, str]:
     Returns:
         Dict mapping model IDs to display names
     """
+    client = None
     try:
+        if not api_key:
+            print("[API_CONFIG] No Gemini API key provided - using default model list")
+            return API_CONFIG["gemini"]["models"]
+
         os.environ["GOOGLE_API_KEY"] = api_key
-        client = genai.Client()
+        client = genai.Client(api_key=api_key)
         models = {}
 
         print("[API_CONFIG] Fetching available Gemini models...")
@@ -323,6 +328,12 @@ def fetch_available_gemini_models(api_key: str) -> Dict[str, str]:
 
         traceback.print_exc()
         return API_CONFIG["gemini"]["models"]
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
 
 
 def fetch_available_openai_models(api_key: str) -> Dict[str, str]:

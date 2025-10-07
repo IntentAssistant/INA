@@ -7,11 +7,82 @@ import base64
 import io
 import json
 import os
-import requests
+import tempfile
 from datetime import datetime
+from importlib import resources
 from typing import Dict, List, Optional, Tuple
+
+import requests
+import urllib3
 from PIL import Image
 from google import genai
+
+# Ensure the Google Gemini client cleans up safely even if initialization fails
+_original_client_del = getattr(genai.Client, "__del__", None)
+
+
+def _safe_genai_client_del(self):
+    if hasattr(self, "_api_client"):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+if _original_client_del is not None:
+    genai.Client.__del__ = _safe_genai_client_del
+
+
+def _ensure_certifi_certificate() -> Optional[str]:
+    """Ensure certifi's cacert.pem is available as a real file.
+
+    When packaged with py2app, certifi may live inside a zip archive which breaks
+    libraries expecting a normal filesystem path. If that happens we extract the
+    certificate to a temporary file and point OpenSSL to it.
+    """
+    try:
+        import certifi
+
+        cert_path = certifi.where()
+        if os.path.exists(cert_path):
+            if not os.environ.get("SSL_CERT_FILE") or not os.path.exists(
+                os.environ.get("SSL_CERT_FILE", "")
+            ):
+                os.environ["SSL_CERT_FILE"] = cert_path
+            if not os.environ.get("REQUESTS_CA_BUNDLE") or not os.path.exists(
+                os.environ.get("REQUESTS_CA_BUNDLE", "")
+            ):
+                os.environ["REQUESTS_CA_BUNDLE"] = cert_path
+            _patch_requests_cert_path(cert_path)
+            return cert_path
+
+        # certifi is probably inside a zip - extract to temp file
+        cacert = resources.files("certifi").joinpath("cacert.pem").read_bytes()
+        tmp_dir = os.path.join(tempfile.gettempdir(), "ina_certifi")
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_cert_path = os.path.join(tmp_dir, "cacert.pem")
+        with open(tmp_cert_path, "wb") as f:
+            f.write(cacert)
+
+        os.environ["SSL_CERT_FILE"] = tmp_cert_path
+        os.environ["REQUESTS_CA_BUNDLE"] = tmp_cert_path
+        _patch_requests_cert_path(tmp_cert_path)
+        return tmp_cert_path
+    except Exception as exc:
+        print(f"[CERTIFI] Failed to ensure certificate file: {exc}")
+        return None
+
+
+def _patch_requests_cert_path(cert_path: str) -> None:
+    """Force requests/urllib3 to use the extracted certificate bundle."""
+    if not cert_path:
+        return
+    try:
+        requests.utils.DEFAULT_CA_BUNDLE_PATH = cert_path
+        requests.adapters.DEFAULT_CA_BUNDLE_PATH = cert_path
+        urllib3.util.ssl_.DEFAULT_CA_BUNDLE_PATH = cert_path
+    except Exception as exc:
+        print(f"[CERTIFI] Failed to patch requests cert path: {exc}")
 
 from ..config.api_config import (
     LLMProvider,
@@ -44,14 +115,33 @@ class DirectLLMClient:
 
         # Initialize Gemini SDK if using Gemini (new SDK)
         if self.provider == LLMProvider.GEMINI:
+            _ensure_certifi_certificate()
             os.environ["GOOGLE_API_KEY"] = self.api_key
-            self.gemini_client = genai.Client()
+            try:
+                self.gemini_client = genai.Client(api_key=self.api_key)
+            except Exception as exc:
+                import traceback
+
+                print(f"[GEMINI_INIT] Exception while creating client: {exc!r}")
+                traceback.print_exc()
+                raise
             self.gemini_model_id = self.config["model"]
             # Store generation config parameters
             self.gemini_config = {
                 "temperature": self.config["temperature"],
                 "max_output_tokens": self.config["max_tokens"],
             }
+
+    def close(self):
+        """Release any external resources held by this client"""
+        try:
+            if hasattr(self, "gemini_client") and self.gemini_client is not None:
+                self.gemini_client.close()
+        except Exception:
+            pass
+
+    def __del__(self):
+        self.close()
 
     def prepare_image_for_api(self, image_data: bytes) -> str:
         """

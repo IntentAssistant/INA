@@ -1,64 +1,78 @@
 from setuptools import setup
 import os
-import sys
 
-# Get app name from environment variable or use default
-app_name = os.environ.get("APP_NAME", "Intention(new)")
+# --- App Configuration (Hardcoded for INA) ---
+APP_NAME = "INA"
+APP_SCRIPT = "main.py"
+BUNDLE_ID = "com.ina.app"
+ICON_PATH = "src/assets/INA.png"
+APP_VERSION = "0.5.0"
 
-# 번들 ID 환경변수에서 가져오기
-bundle_id = os.environ.get("BUNDLE_ID", "com.intention.app")
-
-# Get icon path from environment variable or use default
-icon_path = os.environ.get("ICON_PATH", "src/assets/icon.png")
-recording_icon_path = os.environ.get(
-    "RECORDING_ICON_PATH", "src/assets/icon_recording.png"
-)
-
-# Get all sound files from assets directory
+# --- Collect all asset files ---
 assets_dir = "src/assets"
-sound_files = []
+asset_files = []
 if os.path.exists(assets_dir):
-    for file in os.listdir(assets_dir):
-        if file.endswith((".mp3", ".wav")):
-            sound_files.append(os.path.join(assets_dir, file))
+    asset_files = [
+        os.path.join(assets_dir, f)
+        for f in os.listdir(assets_dir)
+        if os.path.isfile(os.path.join(assets_dir, f))
+    ]
+DATA_FILES = [("assets", asset_files)] if asset_files else []
 
-APP = ["main.py"]
-DATA_FILES = [
-    ("assets", [icon_path, recording_icon_path] + sound_files),
-]
+# Add a placeholder for the config directory.
+# This ensures that py2app creates a 'config' folder in the Resources directory
+# of the .app bundle, where runtime-generated files can be stored.
+DATA_FILES.append((".config", []))
+
+# --- py2app Options ---
 OPTIONS = {
     "argv_emulation": True,
-    "iconfile": icon_path,
+    "iconfile": ICON_PATH,
     "plist": {
-        "CFBundleName": app_name,
-        "CFBundleDisplayName": app_name,
-        "CFBundleIdentifier": bundle_id,
-        "CFBundleVersion": "2.0.0",
-        "CFBundleShortVersionString": "2.0.0",
+        "CFBundleName": APP_NAME,
+        "CFBundleDisplayName": APP_NAME,
+        "CFBundleIdentifier": BUNDLE_ID,
+        "CFBundleVersion": APP_VERSION,
+        "CFBundleShortVersionString": APP_VERSION,
         "LSMinimumSystemVersion": "10.15",
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,
-        "NSMicrophoneUsageDescription": "This app does not use the microphone.",
-        "NSCameraUsageDescription": "This app does not use the camera.",
-        "NSAppleEventsUsageDescription": "This app requires access to send notifications.",
-        "NSUserNotificationAlertStyle": "alert",
-        "NSScreenCaptureUsageDescription": "Screen capture permission is required for app functionality.",
+        "NSHumanReadableCopyright": "Copyright © 2025 Intentional Computing . All rights reserved.",
+        "NSScreenCaptureUsageDescription": "INA captures your screen to help you stay focused on your intentions.",
     },
-    "packages": ["rumps", "PyQt6", "desktop_notifier", "charset_normalizer"],
+    # Standard packages that are easy for py2app to find
+    "packages": [
+        "rumps",
+        "PyQt6",
+        "desktop_notifier",
+        "psutil",
+        "requests",
+        "charset_normalizer",
+        "certifi",
+        "sentencepiece",
+        "google",
+    ],
+    # Force-include modules/packages that py2app has trouble finding
     "includes": [
         "src",
-        "src.ui",
-        "src.capture",
-        "src.config",
-        "src.upload",
         "desktop_notifier.resources",
+        "google.auth",
+        "google.api_core",
+        "google.ai.generativelanguage",
+        "google.generativeai",
+        "google.genai",
+        "langdetect",
+        "rubicon",
+        "rubicon.objc",
+        "objc",
     ],
     "site_packages": True,
 }
 
+# --- Setup ---
 setup(
-    name=app_name,
-    app=APP,
+    name=APP_NAME,
+    app=[APP_SCRIPT],
     data_files=DATA_FILES,
     options={"py2app": OPTIONS},
     setup_requires=["py2app"],

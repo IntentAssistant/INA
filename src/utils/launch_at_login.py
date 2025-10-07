@@ -51,19 +51,18 @@ def ensure_login_item(app_name="Intention(new)"):
         # AppleScript로 로그인 항목에 추가
         print(f"[LOGIN] Adding {app_name} to login items...")
 
+        escaped_app_name = app_name.replace('"', '\\"')
+        escaped_bundle_path = bundle_path.replace('"', '\\"')
+
         ascript = textwrap.dedent(
-            f"""
+            f'''
             tell application "System Events"
-                if not (exists login item "{app_name}") then
-                    make login item at end with properties {{ \\
-                        name:"{app_name}", \\
-                        path:"{bundle_path}", \\
-                        kind:"Application", \\
-                        hidden:false }}
+                if not (exists login item "{escaped_app_name}") then
+                    make login item at end with properties {{name:"{escaped_app_name}", path:"{escaped_bundle_path}", kind:"Application", hidden:false}}
                 end if
             end tell
-        """
-        )
+            '''
+        ).strip()
 
         # AppleScript 실행
         result = subprocess.run(

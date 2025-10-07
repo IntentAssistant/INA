@@ -9,7 +9,7 @@ APP_VERSION = "0.5.0"
 
 # Storage Settings - Images no longer stored locally
 # Only configuration and session data are stored
-DEFAULT_STORAGE_DIR = "~/AIM_Data"
+DEFAULT_STORAGE_DIR = "~/INA_Data"
 CONFIG_DIR = "~/.intention_app"
 PROMPT_CONFIG_FILE = "prompt_config.json"
 

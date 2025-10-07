@@ -37,7 +37,7 @@ class IntentionalComputingApp(rumps.App):
 
         # Initialize rumps app with minimal visibility
         super().__init__(
-            "", icon=None, quit_button=None
+            "INA", icon=None, quit_button=None
         )  # Empty name to hide from menu bar
 
         # Initialize storage (no user config needed - local only)
@@ -354,12 +354,12 @@ class IntentionalComputingApp(rumps.App):
             from PyQt6.QtWidgets import QMessageBox
 
             msg = QMessageBox()
-            msg.setWindowTitle("API Configuration Required - AIM")
+            msg.setWindowTitle("API Configuration Required - INA")
             msg.setIcon(QMessageBox.Icon.Information)
-            msg.setText("Welcome to AIM (Aligned Intention Monitoring)!")
+            msg.setText("Welcome to INA (Intent Assistant)!")
             msg.setInformativeText(
-                "To use AIM, you need to configure an AI model provider (OpenAI GPT or Google Gemini).\n\n"
-                "Would you like to configure your API settings now?"
+                "To use INA, you need to configure an AI model provider (OpenAI GPT or Google Gemini).\n\n"
+                "Please go to Settings > Models to enter your API key."
             )
 
             # Add buttons
@@ -992,7 +992,7 @@ class IntentionalComputingApp(rumps.App):
     def _setup_auto_login(self):
         """Setup auto-login after app is fully initialized"""
         try:
-            app_name = "AIM"
+            app_name = "INA"
             print(f"[INIT] Setting up auto-login for: {app_name}")
             ensure_login_item(app_name)
         except Exception as e:

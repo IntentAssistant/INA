@@ -120,7 +120,7 @@ class APISettingsDialog(QDialog):
 
     def setup_ui(self):
         """Setup the UI layout"""
-        self.setWindowTitle("API Settings - AIM")
+        self.setWindowTitle("API Settings - INA")
         self.setModal(True)
         self.setMinimumSize(800, 700)
         self.resize(900, 800)
@@ -516,9 +516,8 @@ class APISettingsDialog(QDialog):
             if not configured_providers:
                 QMessageBox.warning(
                     self,
-                    "No API Configured",
-                    "You haven't configured any API keys. The app may not function properly.\n\n"
-                    "Please add at least one API key to use AIM.",
+                    "API Key Required",
+                    "Please add at least one API key to use INA.",
                 )
                 return
 

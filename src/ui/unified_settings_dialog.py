@@ -784,6 +784,7 @@ class UnifiedSettingsDialog(QDialog):
             original_key = os.getenv(API_CONFIG[provider.value]["api_key_env"])
             os.environ[API_CONFIG[provider.value]["api_key_env"]] = api_key
 
+            client = None
             try:
                 # Get currently selected model from UI
                 selected_model = self.model_combo.currentData()
@@ -824,6 +825,8 @@ class UnifiedSettingsDialog(QDialog):
                         f"❌ API key test failed:\n\nModel: {model_name}\n{result['message']}",
                     )
             finally:
+                if client is not None:
+                    client.close()
                 # Restore original key
                 if original_key:
                     os.environ[API_CONFIG[provider.value]["api_key_env"]] = original_key
