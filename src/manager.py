@@ -167,7 +167,13 @@ class ThreadManager(QObject):
                         if isinstance(output, (int, float, str)) and output != "error"
                         else 0
                     )
-                    self.last_score = 1 if output_value > 0.6 else 0
+                    # Classify into 3 states: focused (0-0.3), uncertain (0.4-0.6), distracted (0.7-1.0)
+                    if output_value < 0.4:
+                        self.last_score = 0  # Focused
+                    elif output_value >= 0.7:
+                        self.last_score = 1  # Distracted
+                    else:
+                        self.last_score = 2  # Uncertain
                     self.analysis_callback(result)
                 except (ValueError, TypeError):
                     print(f"[ERROR] Invalid output value: {output}")

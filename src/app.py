@@ -297,8 +297,8 @@ class IntentionalComputingApp(rumps.App):
         self.message_update_flag = 0
         self.consecutive_focus_count = 0
         self.focus_notification_threshold = 15
-        self.acquire_threshold = 2
-        self.release_threshold = 2
+        self.acquire_threshold = 1  # Changed to 1 for immediate response
+        self.release_threshold = 1  # Changed to 1 for immediate response
         self.current_state = 0
         self.consecutive_ones = 0
         self.consecutive_zeros = 0
@@ -449,7 +449,13 @@ class IntentionalComputingApp(rumps.App):
         try:
             # Get output value and message
             output_raw = float(server_response.get("output", 0))
-            output = 1 if output_raw > 0.6 else 0
+            # Classify into 3 states: focused (0-0.3), uncertain (0.4-0.6), distracted (0.7-1.0)
+            if output_raw < 0.4:
+                output = 0  # Focused (on-task)
+            elif output_raw >= 0.7:
+                output = 1  # Distracted (off-task)
+            else:
+                output = 2  # Uncertain (no sound)
             # Use 'message' field for user display (fallback to 'reason' for debugging)
             current_message = server_response.get(
                 "message", server_response.get("reason", "")
@@ -490,12 +496,13 @@ class IntentionalComputingApp(rumps.App):
                 print(f"[FEEDBACK] Stored LLM response for potential feedback")
 
             # Update consecutive counters
-            if output == 1:  # Now distracted state
+            if output == 1:  # Distracted state
                 self.consecutive_ones += 1
                 self.consecutive_zeros = 0
-            else:  # Now focused state
+            elif output == 0:  # Focused state
                 self.consecutive_zeros += 1
                 self.consecutive_ones = 0
+            # output == 2 (uncertain): don't update counters, maintain current state
 
             # Check if this is the first message
             is_first_message = self.current_message is None
@@ -633,6 +640,10 @@ class IntentionalComputingApp(rumps.App):
 
     def _handle_state_transition(self, output):
         """Handle state transition logic"""
+        # No state transition for uncertain output (2)
+        if output == 2:
+            return False
+
         # Transition to distracted state when consecutive ones reach threshold
         if self.current_state == 0 and self.consecutive_ones >= self.acquire_threshold:
             self.current_state = 1

@@ -3,6 +3,59 @@ Prompt templates for the Intentional Computing app
 All prompts are defined here as Python variables for easy modification
 """
 
+from langdetect import detect, LangDetectException
+
+
+def detect_language(text):
+    """
+    Detect the language of the given text using langdetect library
+    Returns language instruction string for the LLM
+    """
+    if not text or not text.strip():
+        return "Respond in English"
+
+    try:
+        # Detect language code (e.g., 'ko', 'ja', 'en', 'zh-cn', etc.)
+        lang_code = detect(text)
+
+        # Map language codes to full English names
+        language_map = {
+            "ko": "Korean",
+            "ja": "Japanese",
+            "zh-cn": "Chinese",
+            "zh-tw": "Chinese",
+            "en": "English",
+            "es": "Spanish",
+            "fr": "French",
+            "de": "German",
+            "it": "Italian",
+            "pt": "Portuguese",
+            "ru": "Russian",
+            "ar": "Arabic",
+            "hi": "Hindi",
+            "th": "Thai",
+            "vi": "Vietnamese",
+            "id": "Indonesian",
+            "nl": "Dutch",
+            "pl": "Polish",
+            "tr": "Turkish",
+            "sv": "Swedish",
+            "da": "Danish",
+            "no": "Norwegian",
+            "fi": "Finnish",
+        }
+
+        # Get language name, default to English if not in map
+        language_name = language_map.get(lang_code, "English")
+
+        # Return instruction for LLM
+        return f"Respond in {language_name}"
+
+    except LangDetectException:
+        # If detection fails, default to English
+        return "Respond in English"
+
+
 # General instruction for all prompts
 GENERAL_INSTRUCTION = """[General Instruction]
 You are a friendly AI coach with balanced sensitivity to task focus and a neutral communication style. 
@@ -43,12 +96,10 @@ SCORING_GUIDELINE_PROBABILITY = """[Scoring Guidelines]
 0.0: Perfectly relevant 
 - Clearly aligned with your task  
 - Example: Writing a report, coding for a project, or shopping for a specific item on e-commerce, 
-- 사용자가 보는 화면이 생산적인 도구라 해서 무조건 일치한다 하면 안됩니다. 유저의 현재 행동이 입력했던 의도와 얼마나 정말로 일치 될지 잘 고민해 보고 점수를 매겨주세요.
 
 0.2: Mostly relevant  
 - Indirectly relevant but necessary (e.g., searching, communication, reference gathering)
 - Example: Watching a video tutorial on the same topic, reading a related article, or discussing with peers about the task
-- 사용자가 보는 화면이 생산적인 도구라 해서 무조건 일치한다 하면 안됩니다. 유저의 현재 행동이 입력했던 의도와 얼마나 정말로 일치 될지 잘 고민해 보고 점수를 매겨주세요.
 
 0.4: Somewhat relevant  
 - Indirectly helpful but not essential 
@@ -202,34 +253,33 @@ Only return the JSON object. Do not include any explanation or prefix text"""
 
 MESSAGE_INSTRUCTION = (
     MESSAGE_INSTRUCTION
-) = """[Message Instruction]
+) = """
+[Message Language]
+{message_language}
 
+[Important Notes for Message Generation]
+When multiple programs are visible, assume the 'frontmost app info' is the user's main focus and generate your message accordingly.
+If you can't get any information from the screen, use the 'frontmost' or 'URL' data to create a relevant message.
 
-[메시지 작성시 중요 참고사항]
-항상 한국어로 존댓말을 사용하여 메시지를 생성해주세요. 
-score가 0.0 0.2 일때는 사용자에게 ?가 들어간 질문을 하지 마시오. (의문형이 아닌 칭찬만 해주세요)
-여러 프로그램이 동시에 보이는 경우에는 frontmost app info 가 사용자가 현재 메인으로 보는 프로그램인걸 감안하여 메시지를 생성해주세요.
-화면을 통해 아무런 정보를 얻을수 없을때는 frontmost나 url 정보를 참고해서 메시지를 생성해주세요.
+[Message Generation Guidelines]
+When creating notifications, follow these guides:
+React to the user's activity with a friendly, supportive tone.
+Briefly and clearly mention what the user is doing.
+Maintain a positive and encouraging vibe overall.
+Use short, warm messages to help the user stay in their flow.
 
-[메시지 작성 지침]
-알림 메시지를 생성할 때 다음 가이드를 따라주세요:
-친근한 엄마 같은 말투로, 사용자의 작업을 보고 반응해줘.
-사용자가 무엇을 하고 있는지 최대한 간단하고 명확하게 언급해줘.
+When the user is focused, share an observation and give them a boost.
+Examples:
+"Wow, you're really in the zone with {{details}}! Keep it up."
+"You're making great progress on {{details}}. Looking good!"
+"This focus on {{details}} is exactly what you need. Awesome work."
 
-사용자가 집중하고 있을 때는 관찰한 내용을 공유하고, 칭찬해줘.
-예시:
-“지금 {details}에 집중하고 있는 게 보여요.”
-“{details}은(는) {details}에 정말 도움이 될 거예요.”
-“계속해서 {details} 코딩해보세요.”
-
-사용자가 산만할 때는 주의를 주고, 구체적인 제안도 함께 제공해줘.
-예시:
-“{details}에 정신이 팔린 것 같아요.”
-“{details} 때문에 집중이 흐트러진 것 같아요.”
-“{detailed suggestion}로 다시 돌아가보는 건 어때요?”
-“제발 {detailed suggestion}에 집중해보세요.”
-전체적으로 긍정적이고 격려하는 톤 유지
-짧고 따뜻한 메시지로 사용자가 흐름을 잃지 않도록 도와주세요.
+When the user is distracted, gently guide them back and offer a specific suggestion.
+Examples:
+"Whoops, looks like {{details}} is pulling your attention away. It happens!"
+"It's easy to get sidetracked by {{details}}. Ready to jump back into {{detailed suggestion}}?"
+"Let's gently bring our focus back to {{detailed suggestion}}, shall we?"
+"That {{detailed suggestion}} is waiting for you. How about we give it another look?"
 
 """
 
@@ -252,6 +302,10 @@ def build_intention_analysis_prompt(
     Build the intention analysis prompt with various options
     """
     print(f"[LLM] Building prompt for task: {task_name}")
+
+    # Detect language from task_name
+    message_language = detect_language(task_name)
+    print(f"[LLM] Detected language instruction: {message_language}")
 
     prompt_text = ""
 
@@ -322,7 +376,10 @@ def build_intention_analysis_prompt(
     prompt_text += "}\n\n"
 
     if message_to_user:
-        prompt_text += MESSAGE_INSTRUCTION + "\n\n"
+        # Format MESSAGE_INSTRUCTION with detected language
+        prompt_text += (
+            MESSAGE_INSTRUCTION.format(message_language=message_language) + "\n\n"
+        )
 
     # Add important rules
     prompt_text += IMPORTANT_RULES

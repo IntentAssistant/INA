@@ -18,7 +18,7 @@ def play_notification_sound(state: int):
     """Play notification sound based on state
 
     Args:
-        state: 0 for focused (on-task), 1 for distracted (off-task)
+        state: 0 for focused (on-task), 1 for distracted (off-task), 2 for uncertain (no sound)
     """
     try:
         from ..config.api_config import get_api_config_manager
@@ -28,6 +28,11 @@ def play_notification_sound(state: int):
         # Check if sound is enabled
         if not api_manager.get_sound_enabled():
             print("[SOUND] Notification sound is disabled")
+            return
+
+        # No sound for uncertain state
+        if state == 2:
+            print("[SOUND] Uncertain state (0.4-0.6) - no sound played")
             return
 
         # Get sound file based on state
