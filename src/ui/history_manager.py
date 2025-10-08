@@ -12,6 +12,13 @@ from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont
 # Import LocalStorage to get proper directory paths
 from ..logging.storage import LocalStorage
 
+RATING_TEXT = {
+    1: "Not aligned at all",
+    2: "Barely aligned",
+    3: "Somewhat aligned",
+    4: "Mostly aligned",
+    5: "Fully aligned",
+}
 
 class TimelineWidget(QWidget):
     """Custom timeline widget with connected circles and lines"""
@@ -433,24 +440,11 @@ class HistoryManager:
 
     def get_session_rating_text(self, record):
         """Get rating as text for a record"""
-        from ..config.language import get_text
-
         rating = record.get("rating")
         if rating is None:
             return None
 
-        # Convert rating (1-5) to text
-        rating_text_keys = {
-            1: "rating_not_aligned",
-            2: "rating_barely_aligned",
-            3: "rating_somewhat_aligned",
-            4: "rating_aligned",
-            5: "rating_very_well_aligned",
-        }
-
-        text_key = rating_text_keys.get(rating)
-        if text_key:
-            return get_text(text_key)
+        return RATING_TEXT.get(rating)
 
         return None
 
@@ -476,19 +470,7 @@ class HistoryManager:
 
     def get_rating_text_by_value(self, rating):
         """Get rating text by rating value (1-5)"""
-        from ..config.language import get_text
-
-        rating_text_keys = {
-            1: "rating_not_aligned",
-            2: "rating_barely_aligned",
-            3: "rating_somewhat_aligned",
-            4: "rating_aligned",
-            5: "rating_very_well_aligned",
-        }
-
-        text_key = rating_text_keys.get(rating)
-        if text_key:
-            return get_text(text_key)
+        return RATING_TEXT.get(rating)
 
         return None
 

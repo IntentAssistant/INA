@@ -52,7 +52,6 @@ from ..config.constants import (
     WINDOW_MIN_HEIGHT,
     NOTIFICATION_ENABLED,
 )
-from ..config.language import get_text
 
 
 # Import new modular components
@@ -61,9 +60,18 @@ from .window_manager import WindowManager
 from .llm_client import LLMClient
 from .feedback_manager import FeedbackManager
 
-# These will be updated by refresh_ui_language()
-TYPE_MESSAGE = get_text("type_message")
-CLICK_MESSAGE = get_text("click_message")
+APP_TITLE_TEXT = "INA"
+TYPE_MESSAGE = "Enter your intention (e.g., 'Write essay') here!"
+CLICK_MESSAGE = "Click to reset intention ⬆️ or start getting advice ↗️"
+SET_BUTTON_TEXT = "Set"
+START_BUTTON_TEXT = "Start"
+STOP_BUTTON_TEXT = "Stop"
+FEEDBACK_MESSAGE_TEXT = "Is this message correct?"
+LOADING_TEXT = "Loading"
+CLARIFICATION_COMPLETE_TEXT = "OK! Click the start button"
+CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
+INSTRUCTION_START_TEXT = "Click to start activity ↑"
+INSTRUCTION_FINISH_TEXT = "Click 'Done' to finish activity ↑"
 
 # UI Constants
 INPUT_HEIGHT = 40  # Height for input fields and buttons
@@ -259,14 +267,8 @@ class Dashboard(QWidget):
         self.focus_check_timer.start(self.FOCUS_CHECK_INTERVAL)
         print("[FOCUS] Basic monitoring timer started")
 
-    def _is_korean_text(self, text):
-        """Check if text contains Korean characters"""
-        import re
-
-        return bool(re.search(r"[가-힣]", text))
-
     def init_ui(self):
-        APP_TITLE = get_text("app_title_1")
+        APP_TITLE = APP_TITLE_TEXT
 
         # Basic window settings
         self.setWindowTitle(APP_TITLE)
@@ -422,7 +424,7 @@ class Dashboard(QWidget):
         self.task_input.textChanged.connect(self._on_text_changed)
 
         # Set button to confirm task
-        self.set_button = QPushButton(get_text("set_button"))  # Button to set task
+        self.set_button = QPushButton(SET_BUTTON_TEXT)  # Button to set task
         self.set_button.clicked.connect(self.set_task)  # Click handler
         self.set_button.setFixedWidth(BUTTON_WIDTH)  # Fixed button width
         self.set_button.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
@@ -458,7 +460,7 @@ class Dashboard(QWidget):
         self.task_display.mousePressEvent = self.task_display_clicked
 
         # Start/Stop button
-        self.start_button = QPushButton(get_text("start_button"))  # Start/stop button
+        self.start_button = QPushButton(START_BUTTON_TEXT)  # Start/stop button
         self.start_button.setObjectName("startButton")
         self.start_button.setCheckable(True)
         self.start_button.clicked.connect(self.toggle_capture)
@@ -801,7 +803,7 @@ class Dashboard(QWidget):
 
         # Update task display
         self.task_display.setText(task)
-        self.start_button.setText(get_text("start_button"))
+        self.start_button.setText(START_BUTTON_TEXT)
 
         # Keep message label hidden to prevent layout changes
         self.message_label.hide()
@@ -982,7 +984,7 @@ class Dashboard(QWidget):
             # Start intention session
             self.start_intention_session(self._current_task)
 
-            self.start_button.setText(get_text("stop_button"))
+            self.start_button.setText(STOP_BUTTON_TEXT)
             self.is_capturing = True
             self.capture_started.emit()
 
@@ -1023,7 +1025,7 @@ class Dashboard(QWidget):
             # Change button text and state
             self.is_capturing = False
             self.capture_stopped.emit()
-            self.start_button.setText(get_text("start_button"))
+            self.start_button.setText(START_BUTTON_TEXT)
             self.start_button.setChecked(False)
 
             # Return to initial state (input state)
@@ -1192,7 +1194,6 @@ class Dashboard(QWidget):
         # Check for various settings dialogs
         settings_dialogs = [
             "user_settings_dialog",
-            "language_settings_dialog",
             "settings_dialog",
         ]
 
@@ -1296,36 +1297,6 @@ class Dashboard(QWidget):
             # Clear reference on error
             self.user_settings_dialog = None
 
-    def open_language_settings(self):
-        """Open language settings dialog from dashboard"""
-        try:
-            from ..ui.settings_dialog import LanguageSettingsDialog
-            from PyQt6.QtWidgets import QDialog
-
-            self.language_settings_dialog = LanguageSettingsDialog(self)
-
-            # Connect language change signal
-            self.language_settings_dialog.language_changed.connect(
-                self._on_language_changed
-            )
-
-            self.language_settings_dialog.exec()
-            # Clear reference after dialog closes
-            self.language_settings_dialog = None
-        except Exception as e:
-            print(f"Error opening language settings: {e}")
-            # Clear reference on error
-            self.language_settings_dialog = None
-
-    def _on_language_changed(self, new_language):
-        """Handle language change from dashboard settings"""
-        print(f"[LANGUAGE] Language changed to: {new_language} from dashboard")
-
-        # Refresh dashboard UI immediately
-        self.refresh_ui_language()
-
-    # open_sound_settings method removed - sound functionality disabled
-    # open_display_settings method removed - single display auto-selection
 
     def force_quit(self):
         """Forcefully quit the entire application, including background process"""
@@ -1541,11 +1512,11 @@ class Dashboard(QWidget):
 
         # Determine feedback message based on raw_value
         if self.current_raw_value <= 0.2:
-            feedback_message = get_text("feedback_focused")
+            feedback_message = FEEDBACK_MESSAGE_TEXT
         elif self.current_raw_value <= 0.6:
-            feedback_message = get_text("feedback_ambiguous")
+            feedback_message = FEEDBACK_MESSAGE_TEXT
         else:  # 0.7 - 1.0
-            feedback_message = get_text("feedback_distracted")
+            feedback_message = FEEDBACK_MESSAGE_TEXT
 
         # Find and update the feedback window message label
         feedback_window = self.window_manager.windows.get("feedback")
@@ -1799,7 +1770,7 @@ class Dashboard(QWidget):
         """Update the loading animation"""
         self.loading_dots = (self.loading_dots + 1) % 4
         if self.loading_message_widget:
-            loading_text = get_text("loading")
+            loading_text = LOADING_TEXT
             self.loading_message_widget.setText(
                 f"{loading_text}{'.' * self.loading_dots}"
             )
@@ -2029,7 +2000,7 @@ class Dashboard(QWidget):
         self.chat_layout.addStretch()
 
         # Handle loading animation
-        loading_text = get_text("loading")
+        loading_text = LOADING_TEXT
         if not is_user and text.startswith(loading_text):
             # Start loading animation for AI loading messages
             self.loading_message_widget = message_label
@@ -2043,7 +2014,7 @@ class Dashboard(QWidget):
         QTimer.singleShot(50, self.scroll_clarification_to_bottom)
 
         # Store in conversation history (but not loading messages)
-        loading_text = get_text("loading")
+        loading_text = LOADING_TEXT
         if not text.startswith(loading_text):
             self.clarification_conversation.append({"text": text, "is_user": is_user})
 
@@ -2104,7 +2075,7 @@ class Dashboard(QWidget):
                 filepath = self.llm_client.save_results(sorted_list)
 
                 # Show simple completion message
-                completion_msg = get_text("clarification_complete")
+                completion_msg = CLARIFICATION_COMPLETE_TEXT
                 self.add_clarification_message(completion_msg, is_user=False)
 
                 # Disable send button and input field after completion
@@ -2130,7 +2101,7 @@ class Dashboard(QWidget):
 
             else:
                 # Show simple completion message even if augmentation failed
-                completion_msg = get_text("clarification_complete")
+                completion_msg = CLARIFICATION_COMPLETE_TEXT
                 self.add_clarification_message(completion_msg, is_user=False)
 
                 # Disable send button and input field after completion
@@ -2170,7 +2141,7 @@ class Dashboard(QWidget):
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON: {e}")
             # Show simple completion message even if parsing failed
-            completion_msg = get_text("clarification_complete")
+            completion_msg = CLARIFICATION_COMPLETE_TEXT
             self.add_clarification_message(completion_msg, is_user=False)
 
             # Disable send button and input field after completion
@@ -2209,7 +2180,7 @@ class Dashboard(QWidget):
         except Exception as e:
             print(f"Error processing augmentation: {e}")
             # Show simple completion message even if error occurred
-            completion_msg = get_text("clarification_complete")
+            completion_msg = CLARIFICATION_COMPLETE_TEXT
             self.add_clarification_message(completion_msg, is_user=False)
 
             # Disable send button and input field after completion
@@ -2248,7 +2219,7 @@ class Dashboard(QWidget):
 
     def get_last_ai_message(self):
         """Get the last AI message from conversation history"""
-        loading_text = get_text("loading")
+        loading_text = LOADING_TEXT
         for conv in reversed(self.clarification_conversation):
             if not conv["is_user"] and not conv["text"].startswith(loading_text):
                 return conv["text"]
@@ -2408,7 +2379,7 @@ class Dashboard(QWidget):
         print(f"[DASHBOARD] Selected intention: {intention}")
 
         # Reset button state to initial "Start" state
-        self.start_button.setText(get_text("start_button"))
+        self.start_button.setText(START_BUTTON_TEXT)
         self.start_button.setChecked(False)
         self.is_capturing = False
 
@@ -2653,7 +2624,7 @@ class Dashboard(QWidget):
         if hasattr(self, "clarification_input"):
             self.clarification_input.setEnabled(True)
             self.clarification_input.setPlaceholderText(
-                get_text("clarification_placeholder")
+                CLARIFICATION_PLACEHOLDER_TEXT
             )
             self.clarification_input.setStyleSheet(
                 """
@@ -2714,7 +2685,7 @@ class Dashboard(QWidget):
         )
 
         # IMMEDIATELY update UI state to avoid confusion
-        self.start_button.setText(get_text("stop_button"))
+        self.start_button.setText(STOP_BUTTON_TEXT)
         self.is_capturing = True
         self.capture_started.emit()
 
@@ -3015,128 +2986,6 @@ class Dashboard(QWidget):
 
         # Continue with normal event processing
         return super().eventFilter(source, event)
-
-    def refresh_ui_language(self):
-        """Refresh all UI text when language changes"""
-        print("[LANGUAGE] Refreshing dashboard UI language")
-
-        # Update global constants
-        global TYPE_MESSAGE, CLICK_MESSAGE
-        TYPE_MESSAGE = get_text("type_message")
-        CLICK_MESSAGE = get_text("click_message")
-
-        # Update window title
-        APP_TITLE = get_text("app_title_1")
-        self.setWindowTitle(APP_TITLE)
-
-        # Update drag bar text
-        if hasattr(self, "drag_bar"):
-            self.drag_bar.setText(APP_TITLE)
-
-        # Update placeholder text
-        if hasattr(self, "task_input"):
-            self.task_input.setPlaceholderText(TYPE_MESSAGE)
-
-        # Update button texts
-        if hasattr(self, "set_button"):
-            self.set_button.setText(get_text("set_button"))
-
-        if hasattr(self, "start_button"):
-            # Check current state and set appropriate text
-            current_text = self.start_button.text()
-            if current_text in ["Start", "시작"]:
-                self.start_button.setText(get_text("start_button"))
-            elif current_text in ["Stop", "중지"]:
-                self.start_button.setText(get_text("stop_button"))
-
-        # Update message labels
-        if hasattr(self, "message_label") and self.message_label.text():
-            # Only update if it contains the clickable message
-            current_msg = self.message_label.text()
-            if "reset intention" in current_msg or "재설정" in current_msg:
-                self.message_label.setText(CLICK_MESSAGE)
-
-        # Update instruction labels
-        if hasattr(self, "instruction_label") and self.instruction_label:
-            current_instruction = self.instruction_label.text()
-            if (
-                "start activity" in current_instruction
-                or "시작하려면" in current_instruction
-            ):
-                self.instruction_label.setText(get_text("instruction_start"))
-            elif (
-                "finish activity" in current_instruction
-                or "마무리" in current_instruction
-            ):
-                self.instruction_label.setText(get_text("instruction_finish"))
-
-        # Daily rating display removed - no longer showing rating in history window
-
-        # Update feedback messages if feedback window is visible
-        if (
-            hasattr(self, "llm_response_window")
-            and self.llm_response_window
-            and self.llm_response_window.isVisible()
-        ):
-            self._update_feedback_message()
-
-        # Update loading animation if currently active
-        if self.loading_timer.isActive() and self.loading_message_widget:
-            loading_text = get_text("loading")
-            self.loading_message_widget.setText(
-                f"{loading_text}{'.' * self.loading_dots}"
-            )
-
-        # Update history window title if visible
-        if hasattr(self, "window_manager") and self.window_manager:
-            history_window = self.window_manager.windows.get("history")
-            if history_window:
-                history_title = history_window.findChild(QLabel, "historyTitle")
-                if history_title:
-                    history_title.setText(get_text("todays_intentions"))
-
-            # Update starting soon window label if visible
-            starting_soon_window = self.window_manager.windows.get("starting_soon")
-            if starting_soon_window:
-                starting_label = starting_soon_window.findChild(QLabel, "startingLabel")
-                if starting_label:
-                    starting_label.setText(get_text("starting_soon"))
-
-            # Update clarification window elements if visible
-            clarification_window = self.window_manager.windows.get("clarification")
-            if clarification_window:
-                clarification_title = clarification_window.findChild(
-                    QLabel, "clarificationTitle"
-                )
-                if clarification_title:
-                    clarification_title.setText(get_text("clarification_title").upper())
-
-        # Update clarification input and send button if they exist
-        if hasattr(self, "clarification_input") and self.clarification_input:
-            self.clarification_input.setPlaceholderText(
-                get_text("clarification_placeholder")
-            )
-
-        if (
-            hasattr(self, "clarification_send_button")
-            and self.clarification_send_button
-        ):
-            self.clarification_send_button.setText(get_text("send_button"))
-
-        # Update rating window if it exists
-        if hasattr(self, "window_manager") and self.window_manager:
-            rating_window = self.window_manager.windows.get("rating")
-            if rating_window:
-                # Update rating window title
-                rating_title = rating_window.findChild(QLabel)
-                if rating_title and rating_title.objectName() == "ratingTitle":
-                    rating_title.setText(get_text("rating_question"))
-
-                # Update rating widget text
-                if hasattr(self, "progress_bar") and hasattr(
-                    self.progress_bar, "refresh_language"
-                ):
-                    self.progress_bar.refresh_language()
 
     def set_float_on_top(self, enabled: bool):
         """Set whether the dashboard floats on top of other windows"""

@@ -550,7 +550,7 @@ class IntentionalComputingApp(rumps.App):
 
                 # Show notification with feedback buttons
                 self.notifications.show_notification(
-                    "알림",
+                    "Notification",
                     self.dashboard.current_task,
                     current_message,
                     self.current_state,
@@ -606,7 +606,7 @@ class IntentionalComputingApp(rumps.App):
 
                     # Show notification with feedback buttons
                     self.notifications.show_notification(
-                        "알림",
+                        "Notification",
                         self.dashboard.current_task,
                         current_message,
                         self.current_state,
@@ -734,7 +734,7 @@ class IntentionalComputingApp(rumps.App):
 
                     # Show notification with feedback buttons
                     self.notifications.show_notification(
-                        "알림",
+                        "Notification",
                         task,
                         reminder_message,
                         1,  # Always distracted state for reminders
@@ -838,12 +838,6 @@ class IntentionalComputingApp(rumps.App):
         # Show recording indicator
         self.update_recording_indicator()
         return True
-
-    def _is_korean_text(self, text):
-        """Check if text contains Korean characters"""
-        import re
-
-        return bool(re.search(r"[가-힣]", text))
 
     # Reminder functionality removed (experimental feature)
 

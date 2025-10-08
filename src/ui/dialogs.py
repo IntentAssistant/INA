@@ -9,9 +9,21 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-import subprocess
-import sys
-from ..config.language import get_text
+
+
+MULTI_DISPLAY_TITLE = "Multiple Displays Detected"
+MULTI_DISPLAY_MESSAGE = (
+    "INA currently supports a single display.\n\n"
+    "Please disconnect extra monitors or disable extended desktop mode, then restart the app."
+)
+MULTI_DISPLAY_INSTRUCTIONS = (
+    "\n\n📋 Choose one of these options:\n"
+    "• Disconnect the external monitor cable\n"
+    "• Close your laptop lid (clamshell mode) to use only the external monitor\n"
+    "• Open System Settings → Displays and disable one display\n\n"
+    "Restart the app afterwards."
+)
+EXIT_APP_BUTTON = "Exit App"
 
 
 class MultiDisplayDialog(QDialog):
@@ -19,7 +31,7 @@ class MultiDisplayDialog(QDialog):
 
     def __init__(self, display_count, display_list, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(get_text("multiple_display_title"))
+        self.setWindowTitle(MULTI_DISPLAY_TITLE)
         self.setModal(True)
         self.setFixedSize(600, 450)  # Increased size for better text visibility
 
@@ -62,7 +74,7 @@ class MultiDisplayDialog(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
 
         # Title
-        title_label = QLabel(get_text("multiple_display_title"))
+        title_label = QLabel(MULTI_DISPLAY_TITLE)
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
@@ -72,34 +84,8 @@ class MultiDisplayDialog(QDialog):
         layout.addWidget(title_label)
 
         # Main message
-        # Get base message from translation and add display info
-        base_message = get_text("multiple_display_message")
-        display_info = (
-            f"\n\n현재 연결된 디스플레이 ({display_count}):\n{display_list}"
-            if get_text("multiple_display_title") == "다중 디스플레이 감지"
-            else f"\n\nCurrently connected displays ({display_count}):\n{display_list}"
-        )
-
-        # Additional instructions based on language
-        additional_instructions = (
-            (
-                "\n\n📋 다음 중 하나를 선택하세요:\n"
-                "• 외부 모니터 케이블 연결 해제\n"
-                "• 노트북 덮개를 닫아 외부 모니터만 사용 (클램셸 모드)\n"
-                "• 시스템 설정 > 디스플레이에서 하나의 디스플레이 비활성화\n\n"
-                "그 다음 앱을 다시 시작하세요."
-            )
-            if get_text("multiple_display_title") == "다중 디스플레이 감지"
-            else (
-                "\n\n📋 Please choose one of these options:\n"
-                "• Disconnect external monitor cable\n"
-                "• Close laptop lid (clamshell mode) to use external monitor only\n"
-                "• Use System Settings > Displays to disable one display\n\n"
-                "Then restart the app."
-            )
-        )
-
-        full_message = base_message + display_info + additional_instructions
+        display_info = f"\n\nCurrently connected displays ({display_count}):\n{display_list}"
+        full_message = MULTI_DISPLAY_MESSAGE + display_info + MULTI_DISPLAY_INSTRUCTIONS
         main_message = QLabel(full_message)
         main_message.setWordWrap(True)
         main_message.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -119,7 +105,7 @@ class MultiDisplayDialog(QDialog):
         layout.addWidget(main_message)
 
         # OK button
-        ok_button = QPushButton(get_text("exit_app_button"))
+        ok_button = QPushButton(EXIT_APP_BUTTON)
         ok_button.setFixedHeight(40)
         ok_button.setStyleSheet(
             """
@@ -241,13 +227,9 @@ class Dialogs:
 
             # Fallback to system notification if dialog fails
             print(f"[DIALOGS] Falling back to system notification...")
-            title = get_text("multiple_display_title")
-            subtitle = get_text("exit_app_button")
-            message = (
-                f"Detected {display_count} displays. App will exit in 3 seconds."
-                if title != "다중 디스플레이 감지"
-                else f"{display_count}개의 디스플레이가 감지되었습니다. 3초 후 앱이 종료됩니다."
-            )
+            title = MULTI_DISPLAY_TITLE
+            subtitle = EXIT_APP_BUTTON
+            message = f"Detected {display_count} displays. The app will exit in 3 seconds."
 
             print(f"[DIALOGS] Showing system notification: {title} - {message}")
             rumps.notification(
@@ -258,36 +240,3 @@ class Dialogs:
             )
             print(f"[DIALOGS] System notification sent")
             return None
-
-    @staticmethod
-    def _show_native_macos_alert(display_count, display_list):
-        """Show native macOS alert dialog using osascript"""
-        # Get translated texts
-        title = get_text("multiple_display_title")
-        base_message = get_text("multiple_display_message")
-        button_text = get_text("exit_app_button")
-
-        # Build full message with display info and instructions based on language
-        if title == "다중 디스플레이 감지":  # Korean
-            display_info = (
-                f"\\n\\n현재 연결된 디스플레이 ({display_count}):\\n\\n{display_list}"
-            )
-            instructions = "\\n\\n📋 다음 중 하나를 선택하세요:\\n• 외부 모니터 케이블 연결 해제\\n• 노트북 덮개를 닫아 외부 모니터만 사용 (클램셸 모드)\\n• 시스템 설정 > 디스플레이에서 하나의 디스플레이 비활성화\\n\\n그 다음 앱을 다시 시작하세요."
-        else:  # English
-            display_info = f"\\n\\nCurrently connected displays ({display_count}):\\n\\n{display_list}"
-            instructions = "\\n\\n📋 Please choose one of these options:\\n• Disconnect external monitor cable\\n• Close laptop lid (clamshell mode) to use external monitor only\\n• Use System Settings > Displays to disable one display\\n\\nThen restart the app."
-
-        alert_text = base_message.replace("\n", "\\n") + display_info + instructions
-
-        script = f"""
-        tell application "System Events"
-            display alert "{title}" message "{alert_text}" buttons {{"{button_text}"}} default button "{button_text}" giving up after 30
-        end tell
-        """
-
-        result = subprocess.run(
-            ["osascript", "-e", script], capture_output=True, text=True, timeout=35
-        )
-
-        print(f"[DIALOGS] Native alert result: {result.returncode}")
-        return result.returncode == 0

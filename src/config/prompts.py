@@ -3,58 +3,6 @@ Prompt templates for the Intentional Computing app
 All prompts are defined here as Python variables for easy modification
 """
 
-from langdetect import detect, LangDetectException
-
-
-def detect_language(text):
-    """
-    Detect the language of the given text using langdetect library
-    Returns language instruction string for the LLM
-    """
-    if not text or not text.strip():
-        return "Respond in English"
-
-    try:
-        # Detect language code (e.g., 'ko', 'ja', 'en', 'zh-cn', etc.)
-        lang_code = detect(text)
-
-        # Map language codes to full English names
-        language_map = {
-            "ko": "Korean",
-            "ja": "Japanese",
-            "zh-cn": "Chinese",
-            "zh-tw": "Chinese",
-            "en": "English",
-            "es": "Spanish",
-            "fr": "French",
-            "de": "German",
-            "it": "Italian",
-            "pt": "Portuguese",
-            "ru": "Russian",
-            "ar": "Arabic",
-            "hi": "Hindi",
-            "th": "Thai",
-            "vi": "Vietnamese",
-            "id": "Indonesian",
-            "nl": "Dutch",
-            "pl": "Polish",
-            "tr": "Turkish",
-            "sv": "Swedish",
-            "da": "Danish",
-            "no": "Norwegian",
-            "fi": "Finnish",
-        }
-
-        # Get language name, default to English if not in map
-        language_name = language_map.get(lang_code, "English")
-
-        # Return instruction for LLM
-        return f"Respond in {language_name}"
-
-    except LangDetectException:
-        # If detection fails, default to English
-        return "Respond in English"
-
 
 # General instruction for all prompts
 GENERAL_INSTRUCTION = """[General Instruction]
@@ -251,11 +199,9 @@ Respond in **JSON format** with two keys:
 
 Only return the JSON object. Do not include any explanation or prefix text"""
 
-MESSAGE_INSTRUCTION = (
-    MESSAGE_INSTRUCTION
-) = """
+MESSAGE_INSTRUCTION = """
 [Message Language]
-{message_language}
+Respond in English.
 
 [Important Notes for Message Generation]
 When multiple programs are visible, assume the 'frontmost app info' is the user's main focus and generate your message accordingly.
@@ -302,10 +248,6 @@ def build_intention_analysis_prompt(
     Build the intention analysis prompt with various options
     """
     print(f"[LLM] Building prompt for task: {task_name}")
-
-    # Detect language from task_name
-    message_language = detect_language(task_name)
-    print(f"[LLM] Detected language instruction: {message_language}")
 
     prompt_text = ""
 
@@ -376,10 +318,7 @@ def build_intention_analysis_prompt(
     prompt_text += "}\n\n"
 
     if message_to_user:
-        # Format MESSAGE_INSTRUCTION with detected language
-        prompt_text += (
-            MESSAGE_INSTRUCTION.format(message_language=message_language) + "\n\n"
-        )
+        prompt_text += MESSAGE_INSTRUCTION + "\n\n"
 
     # Add important rules
     prompt_text += IMPORTANT_RULES

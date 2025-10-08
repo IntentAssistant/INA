@@ -1,7 +1,14 @@
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QCheckBox
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QBrush, QColor, QPen
-from ..config.language import get_text
+
+RATING_LABELS = {
+    1: "Not aligned at all",
+    2: "Barely aligned",
+    3: "Somewhat aligned",
+    4: "Mostly aligned",
+    5: "Fully aligned",
+}
 
 
 class CheckboxRatingWidget(QWidget):
@@ -23,11 +30,7 @@ class CheckboxRatingWidget(QWidget):
 
         # Define rating options with their corresponding values
         self.rating_options = [
-            {"rating": 1, "text_key": "rating_not_aligned"},
-            {"rating": 2, "text_key": "rating_barely_aligned"},
-            {"rating": 3, "text_key": "rating_somewhat_aligned"},
-            {"rating": 4, "text_key": "rating_aligned"},
-            {"rating": 5, "text_key": "rating_very_well_aligned"},
+            {"rating": rating, "label": label} for rating, label in RATING_LABELS.items()
         ]
 
         # Create checkboxes for each rating option
@@ -62,7 +65,7 @@ class CheckboxRatingWidget(QWidget):
             )
 
             # Create label
-            label = QLabel(get_text(option["text_key"]))
+            label = QLabel(option["label"])
             label.setStyleSheet(
                 """
                 QLabel {
@@ -167,7 +170,7 @@ class CheckboxRatingWidget(QWidget):
             if i < len(self.checkboxes):
                 checkbox_data = self.checkboxes[i]
                 label = checkbox_data["label"]
-                label.setText(get_text(option["text_key"]))
+                label.setText(option["label"])
 
                 # Restore normal color
                 label.setStyleSheet(

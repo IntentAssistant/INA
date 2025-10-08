@@ -8,7 +8,6 @@ import os
 import requests
 from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
-from ..config.language import get_text
 
 # Import LocalStorage to get proper directory paths
 from ..logging.storage import LocalStorage
@@ -18,6 +17,9 @@ from ..config.prompts import format_clarification_prompt, format_augmentation_pr
 
 # Import direct LLM client
 from ..utils.direct_llm_client import get_configured_client
+
+LOADING_MESSAGE = "Loading..."
+CLARIFICATION_COMPLETE_MESSAGE = "Clarification complete!"
 
 
 class ClarificationManager:
@@ -286,7 +288,7 @@ class LLMClient:
         """Request clarification question from LLM API using the provided prompt"""
 
         # Show loading message with animation
-        self.dashboard.add_clarification_message(get_text("loading"), is_user=False)
+        self.dashboard.add_clarification_message(LOADING_MESSAGE, is_user=False)
 
         # Create and start clarification thread
         self.clarification_thread = ClarificationThread(
@@ -308,7 +310,7 @@ class LLMClient:
         """Send clarification message to LLM API (deprecated - use new cycle methods)"""
 
         # Show loading message with animation
-        self.dashboard.add_clarification_message(get_text("loading"), is_user=False)
+        self.dashboard.add_clarification_message(LOADING_MESSAGE, is_user=False)
 
         # Create and start clarification thread
         self.clarification_thread = ClarificationThread(
@@ -335,7 +337,7 @@ class LLMClient:
         augmentation_prompt = self.clarification_manager.get_augmentation_prompt()
 
         # Show loading message with animation
-        self.dashboard.add_clarification_message(get_text("loading"), is_user=False)
+        self.dashboard.add_clarification_message(LOADING_MESSAGE, is_user=False)
 
         # Create and start clarification thread for augmentation
         self.clarification_thread = ClarificationThread(
@@ -394,7 +396,7 @@ class LLMClient:
     def handle_clarification_completion(self):
         """Handle the completion of the clarification process"""
         self.dashboard.add_clarification_message(
-            get_text("clarification_complete"), is_user=False
+            CLARIFICATION_COMPLETE_MESSAGE, is_user=False
         )
         self.request_augmentation()
 

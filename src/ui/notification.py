@@ -185,7 +185,7 @@ class NotificationManager:
             # Combine subtitle into the body because DesktopNotifier.send()
             # does not have a separate 'subtitle' parameter.
             full_message = (
-                f"설정한 의도: {subtitle}\n{message_with_emoji}"
+                f"Intention: {subtitle}\n{message_with_emoji}"
                 if subtitle
                 else message_with_emoji
             )
@@ -197,7 +197,7 @@ class NotificationManager:
             # Good/Bad buttons only for notification alerts with callbacks
             buttons = []
             # Create feedback buttons when callbacks are provided
-            if title == "알림" and (on_good or on_bad):
+            if title == "Notification" and (on_good or on_bad):
                 # Generate unique ID for debugging
                 button_id = str(uuid.uuid4())[:8]
                 print("🔔" * 20)
@@ -308,7 +308,7 @@ class NotificationManager:
                 ]
             else:
                 buttons = []
-                if title == "알림":
+                if title == "Notification":
                     print(
                         f"[NOTIFICATION] No feedback callbacks provided - notification only"
                     )
@@ -319,7 +319,7 @@ class NotificationManager:
                 timestamp = int(time.time() * 1000)  # milliseconds
 
                 # For notification alerts, make EVERYTHING unique to force separate notifications
-                if title == "알림":
+                if title == "Notification":
                     # Create completely unique app name for each notification
                     unique_app_name = f"Intention-{unique_id[:8]}"
                     unique_notifier = DesktopNotifier(app_name=unique_app_name)
@@ -373,16 +373,16 @@ class NotificationManager:
         try:
             # 피드백 타입에 따른 메시지
             if feedback_type == "good":
-                reason_title = "✅ 정확했나요?"
-                reason_message = "왜 그렇게 생각하셨나요? 이유를 알려주세요."
+                reason_title = "✅ Was this accurate?"
+                reason_message = "Let us know why you agreed with the AI judgement."
             else:  # bad
-                reason_title = "❌ 부정확했나요?"
-                reason_message = "왜 그렇게 생각하셨나요? 이유를 알려주세요."
+                reason_title = "❌ Was this inaccurate?"
+                reason_message = "Let us know what went wrong with the AI judgement."
 
             def on_replied(user_text):
-                print(f"📝 사용자 피드백 완료!")
-                print(f"   선택: {feedback_type}")
-                print(f"   이유: {user_text}")
+                print("[NOTIFICATION] Feedback with reason submitted")
+                print(f"   Selection: {feedback_type}")
+                print(f"   Reason: {user_text}")
 
                 # 🔥 CRITICAL: 버튼 클릭 시점의 context 사용 (notification_context가 이미 button click context)
                 button_click_context = notification_context
@@ -428,8 +428,8 @@ class NotificationManager:
                 )
 
                 reply_field = ReplyField(
-                    title="이유",
-                    button_title="전송",
+                    title="Reason",
+                    button_title="Submit",
                     on_replied=on_replied,
                 )
 
@@ -439,13 +439,13 @@ class NotificationManager:
                     reply_field=reply_field,
                     buttons=[
                         Button(
-                            title="생략",
-                            on_pressed=lambda: print("생략"),
+                            title="Skip",
+                            on_pressed=lambda: print("[NOTIFICATION] Reason entry skipped"),
                         )
                     ],
                 )
 
-                print(f"🔔 이유 입력 요청 알림 전송: {feedback_type}")
+                print(f"[NOTIFICATION] Reason request notification sent ({feedback_type})")
 
             # 비동기 실행
             try:

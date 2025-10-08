@@ -61,7 +61,6 @@ OPTIONS = {
         "google.ai.generativelanguage",
         "google.generativeai",
         "google.genai",
-        "langdetect",
         "rubicon",
         "rubicon.objc",
         "objc",

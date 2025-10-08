@@ -38,6 +38,13 @@ ANIMATION_SLIDE_OFFSET = 20  # Slide animation offset in pixels
 DASHBOARD_WIDTH = 400  # Dashboard width
 INPUT_HEIGHT = 40  # Height for input fields and buttons
 
+HISTORY_TITLE_TEXT = "Today's Intentions"
+CLARIFICATION_TITLE_TEXT = "Clarification"
+CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
+SEND_BUTTON_TEXT = "Send"
+STARTING_SOON_TEXT = "Starting soon..."
+RATING_QUESTION_TEXT = "How well did your work align with your intention?"
+
 
 class WindowManager:
     """Manages popup windows for the dashboard"""
@@ -89,9 +96,7 @@ class WindowManager:
         history_layout.setSpacing(2)
 
         # Title
-        from ..config.language import get_text
-
-        history_title = QLabel(get_text("todays_intentions"))
+        history_title = QLabel(HISTORY_TITLE_TEXT)
         history_title.setObjectName("historyTitle")
         history_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         history_layout.addWidget(history_title)
@@ -168,9 +173,7 @@ class WindowManager:
         clarification_layout.setSpacing(8)
 
         # Title
-        from ..config.language import get_text
-
-        clarification_title = QLabel(get_text("clarification_title").upper())
+        clarification_title = QLabel(CLARIFICATION_TITLE_TEXT.upper())
         clarification_title.setObjectName("clarificationTitle")
         clarification_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         clarification_layout.addWidget(clarification_title)
@@ -201,14 +204,14 @@ class WindowManager:
         # Input field
         clarification_input = QLineEdit()
         clarification_input.setObjectName("clarificationInput")
-        clarification_input.setPlaceholderText(get_text("clarification_placeholder"))
+        clarification_input.setPlaceholderText(CLARIFICATION_PLACEHOLDER_TEXT)
         clarification_input.setFixedHeight(INPUT_HEIGHT)
         clarification_input.returnPressed.connect(
             self.dashboard.send_clarification_message
         )
 
         # Send button
-        clarification_send_button = QPushButton(get_text("send_button"))
+        clarification_send_button = QPushButton(SEND_BUTTON_TEXT)
         clarification_send_button.setObjectName("clarificationSendButton")
         clarification_send_button.setFixedWidth(60)
         clarification_send_button.setFixedHeight(INPUT_HEIGHT)
@@ -318,9 +321,7 @@ class WindowManager:
         starting_layout.setSpacing(0)
 
         # Starting soon label
-        from ..config.language import get_text
-
-        starting_label = QLabel(get_text("starting_soon"))
+        starting_label = QLabel(STARTING_SOON_TEXT)
         starting_label.setObjectName("startingLabel")
         starting_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         starting_layout.addWidget(starting_label)
@@ -635,9 +636,7 @@ class WindowManager:
         rating_layout.setSpacing(16)
 
         # Title
-        from ..config.language import get_text
-
-        rating_title = QLabel(get_text("rating_question"))
+        rating_title = QLabel(RATING_QUESTION_TEXT)
         rating_title.setObjectName("ratingTitle")
         rating_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rating_title.setWordWrap(True)
