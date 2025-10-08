@@ -31,12 +31,14 @@ class LocalStorage:
             self.app_data_dir, "clarification_data"
         )
         self.session_data_dir = os.path.join(self.app_data_dir, "session_data")
+        self.debug_image_dir = os.path.join(self.app_data_dir, "debug_analysis_images")
 
         # Ensure all required directories exist (no screenshots)
         os.makedirs(self.app_data_dir, exist_ok=True)
         os.makedirs(self.intention_history_dir, exist_ok=True)
         os.makedirs(self.clarification_data_dir, exist_ok=True)
         os.makedirs(self.session_data_dir, exist_ok=True)
+        os.makedirs(self.debug_image_dir, exist_ok=True)
 
         # Only print directory info once during app initialization
         print(f"[STORAGE] Data directory: {self.app_data_dir}")
@@ -111,6 +113,11 @@ class LocalStorage:
 
     def get_timestamp(self):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def get_debug_image_dir(self):
+        """Return the directory used for storing debug screenshots"""
+        os.makedirs(self.debug_image_dir, exist_ok=True)
+        return self.debug_image_dir
 
     def save_image(self, image):
         """Deprecated: Images are no longer saved locally"""

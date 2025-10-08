@@ -12,14 +12,6 @@ from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont
 # Import LocalStorage to get proper directory paths
 from ..logging.storage import LocalStorage
 
-RATING_TEXT = {
-    1: "Not aligned at all",
-    2: "Barely aligned",
-    3: "Somewhat aligned",
-    4: "Mostly aligned",
-    5: "Fully aligned",
-}
-
 class TimelineWidget(QWidget):
     """Custom timeline widget with connected circles and lines"""
 
@@ -84,11 +76,6 @@ class TimelineWidget(QWidget):
 
     def wheelEvent(self, event):
         """Handle mouse wheel scrolling"""
-        # Check if dashboard has rating window visible
-        if hasattr(self, "dashboard") and self.dashboard.is_rating_window_visible():
-            print("[DEBUG] Rating required before timeline interaction")
-            return
-
         if len(self.items) <= self.max_visible_items:
             return  # No need to scroll if all items fit
 
@@ -421,59 +408,6 @@ class HistoryManager:
         print(f"Started session: {intention} (session_id: {session_id})")
         return self.current_session
 
-    def set_session_rating(self, rating):
-        """Set rating for the current session"""
-        if self.current_session:
-            self.current_session["rating"] = rating
-            print(f"Rating set for current session: {rating}/5")
-        else:
-            print("[ERROR] No current session to set rating for!")
-
-    def get_session_rating_percentage(self, record):
-        """Get rating as percentage for a record"""
-        rating = record.get("rating")
-        if rating is None:
-            return None
-
-        # Convert rating (1-5) to percentage (0-100)
-        return (rating - 1) * 25
-
-    def get_session_rating_text(self, record):
-        """Get rating as text for a record"""
-        rating = record.get("rating")
-        if rating is None:
-            return None
-
-        return RATING_TEXT.get(rating)
-
-        return None
-
-    def calculate_today_rating_average(self):
-        """Calculate average rating for today and return as text"""
-        today_records = self.get_today_records()
-
-        ratings = []
-        for record in today_records:
-            rating = record.get("rating")
-            if rating is not None:
-                ratings.append(rating)
-
-        if not ratings:
-            return None
-
-        avg_rating = sum(ratings) / len(ratings)
-        # Round to nearest integer rating (1-5)
-        rounded_rating = round(avg_rating)
-
-        # Return as text
-        return self.get_rating_text_by_value(rounded_rating)
-
-    def get_rating_text_by_value(self, rating):
-        """Get rating text by rating value (1-5)"""
-        return RATING_TEXT.get(rating)
-
-        return None
-
     def end_intention_session(self):
         """End the current intention session"""
         if self.current_session:
@@ -495,17 +429,8 @@ class HistoryManager:
             # Save to file
             self.save_intention_history()
 
-            rating_info = ""
-            if (
-                "rating" in self.current_session
-                and self.current_session["rating"] is not None
-            ):
-                rating_text = self.get_session_rating_text(self.current_session)
-                if rating_text:
-                    rating_info = f" ({rating_text})"
-
             print(
-                f"Ended session: {self.current_session['intention']} ({duration_minutes} min{rating_info})"
+                f"Ended session: {self.current_session['intention']} ({duration_minutes} min)"
             )
             self.current_session = None
             return True
@@ -569,13 +494,9 @@ class HistoryManager:
             except:
                 time_display = "time unknown"
 
-        # Get rating text instead of percentage
-        rating_text = self.get_session_rating_text(record)
-        rating_info = f" | {rating_text}" if rating_text is not None else ""
-
         # Format duration
         if duration is not None:
             duration_str = self.format_duration(duration)
-            return f"{time_display} | {intention} ({duration_str}){rating_info}"
+            return f"{time_display} | {intention} ({duration_str})"
         else:
-            return f"{time_display} | {intention} (in progress...){rating_info}"
+            return f"{time_display} | {intention} (in progress...)"

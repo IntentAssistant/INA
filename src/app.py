@@ -8,7 +8,6 @@ import regex as re
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
-from .ui.menu import AppMenu
 from .ui.dialogs import Dialogs
 from .ui.dashboard import Dashboard
 from .ui.notification import NotificationManager
@@ -131,8 +130,6 @@ class IntentionalComputingApp(rumps.App):
         # Store notification context for feedback
         self.notification_context = {}
 
-        # Setup menu and initialize state
-        self.menu = AppMenu.create_menu(self)
         self.reset_state_tracking()
         self.check_initial_setup()
 

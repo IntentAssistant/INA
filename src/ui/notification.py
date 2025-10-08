@@ -8,7 +8,7 @@ from PyQt6.QtCore import QTimer
 
 # --- Desktop Notifier for macOS Sequoia and beyond ---
 import asyncio
-from desktop_notifier import DesktopNotifier, Button, ReplyField
+from desktop_notifier import DesktopNotifier, Button
 
 # Single notifier instance for the whole module
 notifier = DesktopNotifier(app_name="Intention")
@@ -364,98 +364,6 @@ class NotificationManager:
 
         except Exception as e:
             print(f"[ERROR] Notification failed: {e}")
-
-    @staticmethod
-    def _show_reason_request(
-        feedback_type, original_button_id, dashboard=None, notification_context=None
-    ):
-        """Show 2nd notification asking for reason with ReplyField"""
-        try:
-            # 피드백 타입에 따른 메시지
-            if feedback_type == "good":
-                reason_title = "✅ Was this accurate?"
-                reason_message = "Let us know why you agreed with the AI judgement."
-            else:  # bad
-                reason_title = "❌ Was this inaccurate?"
-                reason_message = "Let us know what went wrong with the AI judgement."
-
-            def on_replied(user_text):
-                print("[NOTIFICATION] Feedback with reason submitted")
-                print(f"   Selection: {feedback_type}")
-                print(f"   Reason: {user_text}")
-
-                # 🔥 CRITICAL: 버튼 클릭 시점의 context 사용 (notification_context가 이미 button click context)
-                button_click_context = notification_context
-
-                # Send feedback message using button click context (same image_id as reflection)
-                if (
-                    user_text.strip()
-                    and dashboard
-                    and hasattr(dashboard, "feedback_manager")
-                    and button_click_context
-                ):
-                    # Use button click context for same image_id as reflection
-                    print(
-                        f"[NOTIFICATION] Using button click context - Image ID: {button_click_context.get('image_id', 'None')}"
-                    )
-                    dashboard.feedback_manager.send_feedback_message_with_context(
-                        user_text.strip(), button_click_context
-                    )
-                    print(
-                        f"[NOTIFICATION] Feedback message sent with button click context"
-                    )
-                elif (
-                    user_text.strip()
-                    and dashboard
-                    and hasattr(dashboard, "feedback_manager")
-                ):
-                    # Fallback to current dashboard state if no context available
-                    print(
-                        f"[NOTIFICATION] No button context, using current dashboard state"
-                    )
-                    dashboard.feedback_manager.send_feedback_message(user_text.strip())
-                    print(
-                        f"[NOTIFICATION] Feedback message sent via dashboard (fallback)"
-                    )
-                else:
-                    print(
-                        f"[NOTIFICATION] No dashboard or empty text, skipping message send"
-                    )
-
-            async def _send_reason_request():
-                unique_notifier = DesktopNotifier(
-                    app_name=f"Intention-Reason-{original_button_id}"
-                )
-
-                reply_field = ReplyField(
-                    title="Reason",
-                    button_title="Submit",
-                    on_replied=on_replied,
-                )
-
-                await unique_notifier.send(
-                    title=reason_title,
-                    message=reason_message,
-                    reply_field=reply_field,
-                    buttons=[
-                        Button(
-                            title="Skip",
-                            on_pressed=lambda: print("[NOTIFICATION] Reason entry skipped"),
-                        )
-                    ],
-                )
-
-                print(f"[NOTIFICATION] Reason request notification sent ({feedback_type})")
-
-            # 비동기 실행
-            try:
-                loop = asyncio.get_running_loop()
-                asyncio.ensure_future(_send_reason_request())
-            except RuntimeError:
-                asyncio.run(_send_reason_request())
-
-        except Exception as e:
-            print(f"[ERROR] Reason request failed: {e}")
 
     @staticmethod
     def _add_emoji_to_title(title, state):

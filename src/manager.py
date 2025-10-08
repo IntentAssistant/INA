@@ -20,6 +20,7 @@ from .utils.indicator import IndicatorWidget
 from .utils.llm_analysis import LLMAnalysisThread
 
 from .logging.storage import LocalStorage
+from .config.api_config import get_api_config_manager
 from .config.constants import (
     CAPTURE_INTERVAL,
     LLM_INVOKE_INTERVAL,
@@ -441,6 +442,16 @@ class ThreadManager(QObject):
             }
 
             self.last_response_image_id = image_id  # Store for feedback reference
+
+            if get_api_config_manager().get_debug_save_images():
+                try:
+                    debug_dir = self.storage.get_debug_image_dir()
+                    file_path = os.path.join(debug_dir, f"{timestamp}.jpg")
+                    with open(file_path, "wb") as f:
+                        f.write(self.current_screenshot_data)
+                    print(f"[DEBUG_CAPTURE] Saved screenshot to {file_path}")
+                except Exception as debug_error:
+                    print(f"[DEBUG_CAPTURE] Failed to save screenshot: {debug_error}")
 
             # Add to image cache for feedback (keep last 10 images)
             self.image_cache.append(
@@ -1195,7 +1206,7 @@ class ThreadManager(QObject):
             self.dashboard.auto_stopped_due_to_inactivity = True
 
             # Call toggle_capture to stop the session
-            # This will automatically trigger rating dialog
+            # Previously triggered rating dialog; now simply ends capture
             print("[AUTO_STOP] Calling toggle_capture to stop session")
             self.dashboard.toggle_capture()
 

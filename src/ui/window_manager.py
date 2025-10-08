@@ -27,7 +27,6 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QFont
 from AppKit import NSWindowSharingNone
-from .percentage_progress_bar import CheckboxRatingWidget
 
 # Animation Constants
 ANIMATION_SHOW_DURATION = 300  # Show animation duration in ms
@@ -43,7 +42,6 @@ CLARIFICATION_TITLE_TEXT = "Clarification"
 CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
 SEND_BUTTON_TEXT = "Send"
 STARTING_SOON_TEXT = "Starting soon..."
-RATING_QUESTION_TEXT = "How well did your work align with your intention?"
 
 
 class WindowManager:
@@ -61,7 +59,6 @@ class WindowManager:
         self.create_clarification_window()
         self.create_starting_soon_window()
         self.create_llm_response_window()
-        self.create_rating_window()
         self.create_feedback_window()
 
     def get_window_flags(self):
@@ -615,82 +612,6 @@ class WindowManager:
         # Hide initially
         feedback_window.hide()
 
-    def create_rating_window(self):
-        """Create session rating window with percentage-based progress bar and emojis above"""
-        rating_window = QWidget()
-        rating_window.setWindowFlags(self.get_window_flags())
-        rating_window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        rating_window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        rating_window.setFixedSize(
-            DASHBOARD_WIDTH, 300
-        )  # Increased height for checkbox options
-
-        # Create container widget for styling
-        rating_container = QWidget(rating_window)
-        rating_container.setObjectName("ratingContainer")
-        rating_container.setGeometry(0, 0, DASHBOARD_WIDTH, 300)
-
-        # Layout for rating window
-        rating_layout = QVBoxLayout(rating_container)
-        rating_layout.setContentsMargins(20, 16, 20, 16)
-        rating_layout.setSpacing(16)
-
-        # Title
-        rating_title = QLabel(RATING_QUESTION_TEXT)
-        rating_title.setObjectName("ratingTitle")
-        rating_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        rating_title.setWordWrap(True)
-        rating_layout.addWidget(rating_title)
-
-        # Rating options container
-        rating_options_container = QWidget()
-        rating_options_container.setFixedHeight(240)  # Height for 5 checkbox options
-        rating_options_layout = QHBoxLayout(rating_options_container)
-        rating_options_layout.setContentsMargins(0, 0, 0, 0)
-        rating_options_layout.setSpacing(0)
-
-        # Create custom checkbox rating widget
-        rating_widget = CheckboxRatingWidget()
-        rating_widget.setFixedHeight(240)  # Height for 5 checkbox options
-        rating_widget.value_changed.connect(self.dashboard.set_rating)
-        rating_options_layout.addWidget(rating_widget)
-
-        rating_layout.addWidget(rating_options_container)
-
-        # Apply styling
-        rating_window.setStyleSheet(
-            """
-            #ratingContainer {
-                background-color: #202020;
-                border-radius: 16px;
-            }
-            #ratingTitle {
-                color: white;
-                font-size: 14px;
-                font-weight: 500;
-                padding: 0px;
-                margin: 0px;
-                line-height: 1.3;
-            }
-        """
-        )
-
-        # Set up opacity effect for animation
-        opacity_effect = QGraphicsOpacityEffect()
-        rating_window.setGraphicsEffect(opacity_effect)
-        opacity_effect.setOpacity(0)
-
-        # Store references
-        self.windows["rating"] = rating_window
-        self.opacity_effects["rating"] = opacity_effect
-        self.dashboard.rating_window = rating_window
-        self.dashboard.progress_bar = rating_widget  # Keep old name for compatibility
-
-        # Drag functionality removed - only dashboard should be draggable
-
-        # Hide initially
-        rating_window.hide()
-
     def show_window_with_animation(self, window_name):
         """Show window with fade-in and slide-down animation"""
         print(f"[WINDOW] Attempting to show window: {window_name}")
@@ -1046,7 +967,6 @@ class WindowManager:
             "starting_soon",
             "llm_response",
             "feedback",
-            "rating",
         ]
 
         for window_name in window_names:

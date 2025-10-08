@@ -67,6 +67,8 @@ class APIConfigManager:
         self.config_file = os.path.join(self.config_dir, "api_config.json")
         self._ensure_config_dir()
         self._config = self._load_config()
+        if self._ensure_defaults():
+            self._save_config()
 
     def _ensure_config_dir(self):
         """Ensure config directory exists"""
@@ -83,6 +85,28 @@ class APIConfigManager:
 
         # Return default config if file doesn't exist or is corrupted
         return {"provider": DEFAULT_LLM_PROVIDER.value, "api_keys": {}, "models": {}}
+
+    def _ensure_defaults(self) -> bool:
+        """Ensure required keys exist; returns True if config was modified"""
+        changed = False
+        if "provider" not in self._config:
+            self._config["provider"] = DEFAULT_LLM_PROVIDER.value
+            changed = True
+        if "api_keys" not in self._config:
+            self._config["api_keys"] = {}
+            changed = True
+        if "models" not in self._config:
+            self._config["models"] = {}
+            changed = True
+        debug_cfg = self._config.get("debug")
+        if not isinstance(debug_cfg, dict):
+            self._config["debug"] = {"save_images": False}
+            changed = True
+        else:
+            if "save_images" not in debug_cfg:
+                debug_cfg["save_images"] = False
+                changed = True
+        return changed
 
     def _save_config(self):
         """Save configuration to file"""
@@ -203,6 +227,17 @@ class APIConfigManager:
     def get_float_on_top(self) -> bool:
         """Get whether dashboard floats on top (default: True)"""
         return self._config.get("float_on_top", True)
+
+    def set_debug_save_images(self, enabled: bool):
+        """Enable or disable saving debug screenshots"""
+        debug_cfg = self._config.setdefault("debug", {})
+        debug_cfg["save_images"] = bool(enabled)
+        self._save_config()
+
+    def get_debug_save_images(self) -> bool:
+        """Return whether debug screenshots should be saved"""
+        debug_cfg = self._config.get("debug", {})
+        return bool(debug_cfg.get("save_images", False))
 
 
 # Global instance

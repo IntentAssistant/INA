@@ -153,9 +153,6 @@ class Dashboard(QWidget):
             parent=self,
         )
 
-        # Session rating removed - only local storage used
-        self.session_rating_manager = None
-
         # Connect feedback signals
         self.feedback_manager.feedback_processed.connect(self._on_feedback_processed)
 
@@ -187,7 +184,6 @@ class Dashboard(QWidget):
 
         # Initialize state variables
         self._current_task = ""
-        self.current_rating = 0
         self.clarification_conversation = []
         self.is_capturing = False
         self.history_timer = QTimer()
@@ -709,11 +705,6 @@ class Dashboard(QWidget):
 
     def task_input_key_press(self, event):
         """Custom key handler for QTextEdit to allow Enter = set_task, Shift+Enter = new line"""
-        # Prevent keyboard input if rating window is visible
-        if self.is_rating_window_visible():
-            print("[DEBUG] Rating required before keyboard input")
-            return
-
         if event.key() == Qt.Key.Key_Return and not (
             event.modifiers() & Qt.KeyboardModifier.ShiftModifier
         ):
@@ -770,7 +761,7 @@ class Dashboard(QWidget):
                 "Please enter your assigned User ID and Password in Settings > User Settings before setting a task.",
             )
             # Open user settings dialog automatically
-            self.open_user_settings()
+            self.open_api_settings()
             return
 
         # Force any pending IME composition to complete
@@ -835,11 +826,6 @@ class Dashboard(QWidget):
 
     def show_input_state(self):
         """Show input container (State 1) and hide task container."""
-        # Prevent switching to input state if rating window is visible
-        if self.is_rating_window_visible():
-            print("[DEBUG] Rating required before switching to input state")
-            return
-
         # Stop focus monitoring when returning to input state
         self.stop_focus_monitoring()
 
@@ -925,7 +911,7 @@ class Dashboard(QWidget):
                     "Please enter your assigned User ID and Password in Settings > User Settings before starting capture.",
                 )
                 # Open user settings dialog automatically
-                self.open_user_settings()
+                self.open_api_settings()
                 return
 
         # Check if task is set
@@ -1054,19 +1040,7 @@ class Dashboard(QWidget):
             # Sound request removed - sound functionality disabled
 
         # Track focus/distracted messages in history manager (skip for BASIC mode)
-        # REMOVED: Now using rating system instead of automatic count tracking
-        # if (
-        #     APP_MODE != APP_MODE_BASIC
-        #     and self.history_manager
-        #     and self.history_manager.current_session
-        # ):
-        #     if level == 0:  # Focused
-        #         self.history_manager.add_focus_message()
-        #     else:  # Distracted (level == 1)
-        #         self.history_manager.add_distracted_message()
-        #
-        #     # Update rating display in real-time
-        #     self.update_rating_display()
+        # REMOVED: rating system and automatic count tracking no longer used
 
         # Update level and message
         # Store level and message
@@ -1179,90 +1153,18 @@ class Dashboard(QWidget):
         # Not using setMask method - parent widget is transparent and child widget has border-radius applied
         pass
 
-    def is_rating_window_visible(self):
-        """Check if rating window is currently visible"""
-        rating_window = self.window_manager.windows.get("rating")
-        return rating_window and rating_window.isVisible()
-
     def is_clarification_window_visible(self):
         """Check if clarification window is currently visible"""
         clarification_window = self.window_manager.windows.get("clarification")
         return clarification_window and clarification_window.isVisible()
 
-    def is_settings_dialog_visible(self):
-        """Check if any settings dialog is visible"""
-        # Check for various settings dialogs
-        settings_dialogs = [
-            "user_settings_dialog",
-            "settings_dialog",
-        ]
-
-        for dialog_attr in settings_dialogs:
-            if hasattr(self, dialog_attr):
-                dialog = getattr(self, dialog_attr)
-                if dialog and hasattr(dialog, "isVisible") and dialog.isVisible():
-                    return True
-
-        # Also check for any visible QDialog children
-        from PyQt6.QtWidgets import QDialog
-
-        for child in self.findChildren(QDialog):
-            if child.isVisible():
-                return True
-
-        return False
-
     def task_display_clicked(self, event):
         """Handle task display click to allow editing"""
-        # Prevent interaction if rating window is visible
-        if self.is_rating_window_visible():
-            print("[DEBUG] Rating required before proceeding")
-            return
-
         if not self.start_button.isChecked():  # Only allow editing when not running
             self.task_input.setPlainText(
                 self.current_task
             )  # Copy current task to input field
             self.show_input_state()  # Switch to input mode
-
-    def show_settings_menu(self):
-        """Show settings menu with various options"""
-        from PyQt6.QtWidgets import QMenu
-
-        # Create context menu
-        menu = QMenu(self)
-        menu.setStyleSheet(
-            """
-            QMenu {
-                background-color: #2D2D2D;
-                border: 1px solid #555555;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                color: white;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #007AFF;
-            }
-        """
-        )
-
-        # Add menu items
-        api_settings_action = menu.addAction("API Settings")
-        api_settings_action.triggered.connect(self.open_api_settings)
-
-        # Language Settings removed - English only
-        # Sound Settings removed - sound functionality disabled
-        # Display Settings removed - single display auto-selection
-
-        # Show menu at settings button position
-        button_pos = self.settings_button.mapToGlobal(
-            self.settings_button.rect().bottomLeft()
-        )
-        menu.exec(button_pos)
 
     def open_api_settings(self):
         """Open unified settings dialog"""
@@ -1270,33 +1172,6 @@ class Dashboard(QWidget):
 
         dialog = UnifiedSettingsDialog(self)
         dialog.exec()
-
-    def open_user_settings(self):
-        """Deprecated: Redirect to API settings"""
-        try:
-            from ..ui.settings_dialog import UserSettingsDialog
-            from PyQt6.QtWidgets import QDialog
-
-            self.user_settings_dialog = UserSettingsDialog({})
-            if self.user_settings_dialog.exec() == QDialog.DialogCode.Accepted:
-                user_input = self.user_settings_dialog.get_user_input()
-                name, password, device = (
-                    user_input["name"],
-                    user_input["password"],
-                    user_input["device"],
-                )
-                if name and password and device:
-                    self.config.set_user_info(
-                        name=name, password=password, device_name=device
-                    )
-                    print(f"User credentials updated: {name}, {device}")
-            # Clear reference after dialog closes
-            self.user_settings_dialog = None
-        except Exception as e:
-            print(f"Error opening user settings: {e}")
-            # Clear reference on error
-            self.user_settings_dialog = None
-
 
     def force_quit(self):
         """Forcefully quit the entire application, including background process"""
@@ -1329,8 +1204,6 @@ class Dashboard(QWidget):
                     print(f"[ERROR] Failed to format record: {e}")
                     continue
 
-            # Update rating display
-            self.update_rating_display()
 
             # If no records exist, ensure UI is still properly initialized
             if not today_records:
@@ -1343,16 +1216,6 @@ class Dashboard(QWidget):
             # Ensure timeline is cleared even if there's an error
             if hasattr(self, "history_timeline"):
                 self.history_timeline.clear_items()
-            # Still try to update rating display
-            try:
-                self.update_rating_display()
-            except Exception as rating_error:
-                print(f"[ERROR] Failed to update rating display: {rating_error}")
-
-    def update_rating_display(self):
-        """Rating display functionality removed - no longer showing daily rating"""
-        # This method is kept for compatibility but no longer displays rating
-        pass
 
     def start_intention_session(self, intention):
         """Start a new intention session"""
@@ -1365,8 +1228,6 @@ class Dashboard(QWidget):
         if session_ended:
             # Refresh the timeline display
             self.load_and_display_today_history()
-            # Update rating display immediately
-            self.update_rating_display()
         return session_ended
 
     def format_duration(self, duration_minutes):
@@ -1931,15 +1792,6 @@ class Dashboard(QWidget):
 
         print("[DASHBOARD] Cleanup complete")
 
-    def show_rating_window(self):
-        """Show rating window with animation"""
-        self.reset_rating_progress()
-        self.window_manager.show_window_with_animation("rating")
-
-    def hide_rating_window(self):
-        """Hide rating window with animation"""
-        self.window_manager.hide_window_with_animation("rating")
-
     def update_window_positions(self):
         """Update all window positions when dashboard moves"""
         self.window_manager.update_all_window_positions()
@@ -2249,130 +2101,6 @@ class Dashboard(QWidget):
             if last_item and last_item.widget():
                 last_item.widget().deleteLater()
                 self.chat_layout.removeItem(last_item)
-
-    def reset_rating_progress(self):
-        """Reset rating progress bar to default state"""
-        self.current_rating = 0
-        if hasattr(self, "progress_bar"):
-            self.progress_bar.set_value(0)  # Reset to no selection
-
-        # Disable UI elements while rating window is visible
-        self.disable_ui_for_rating()
-
-    def set_rating(self, rating):
-        """Set the session rating and submit"""
-        self.current_rating = rating
-        print(
-            f"[RATING] User rated session: {rating}/5 (0%=1, 25%=2, 50%=3, 75%=4, 100%=5)"
-        )
-
-        # Prepare session info for rating submission
-        session_info = {
-            "user_id": "local_user",  # User config removed
-            "session_id": getattr(self, "current_session_start_time", None),
-            "task_name": self.current_task or "Unknown Task",
-            "intention": self.current_task or "",
-            "device_name": "mac_os_device",  # User config removed
-            "app_mode": "rating_submission",
-        }
-
-        # Store rating in history manager and end session immediately
-        if hasattr(self, "history_manager") and self.history_manager:
-            self.history_manager.set_session_rating(rating)
-            print(f"[RATING] Stored rating in history: {rating}/5")
-
-            # End session immediately to save with rating
-            session_ended = self.history_manager.end_intention_session()
-            if session_ended:
-                print(f"[RATING] Session ended and saved with rating: {rating}/5")
-                # Refresh the timeline display
-                self.load_and_display_today_history()
-                # Update rating display immediately
-                self.update_rating_display()
-
-        # Backend rating removed - rating saved locally only
-        print(f"[RATING] Rating saved locally: {rating}/5")
-
-        # Hide rating window after 1 second and show history
-        QTimer.singleShot(1000, self.on_rating_complete)
-
-    def on_rating_complete(self):
-        """Called when rating is complete"""
-        # Session already ended in set_rating(), just clean up UI
-
-        # Stop focus monitoring when session ends
-        self.stop_focus_monitoring()
-
-        # 🔥 CRITICAL: Reset ALL feedback states when session ends
-        self._reset_all_feedback_states()
-        print("[DEBUG] All feedback states reset on session complete")
-
-        # Hide rating window
-        self.hide_rating_window()
-
-        # Re-enable UI elements after rating is complete
-        self.enable_ui_after_rating()
-
-        # Now clear session info after rating is complete
-        self.current_session_start_time = None
-        print("[DEBUG] Rating complete, session_id cleared")
-
-        # Reset current task to empty state
-        self._current_task = ""
-        self.task_input.clear()
-        self.task_display.clear()
-
-        # Switch back to input state (this will show Set button and history window for non-BASIC modes)
-        QTimer.singleShot(300, self.show_input_state)
-
-        # 🔥 CRITICAL: DO NOT restart focus monitoring after manual stop
-        # Focus monitoring should only restart when user manually sets new intention
-        # Restarting here causes memory leaks from timer threads
-        print("[FOCUS] ⚠️  Focus monitoring NOT restarted - preventing memory leaks")
-
-    def disable_ui_for_rating(self):
-        """Disable all UI elements when rating window is visible"""
-        # Disable task display and start button
-        self.task_display.setEnabled(False)
-        self.start_button.setEnabled(False)
-
-        # Apply disabled styling
-        self.task_display.setStyleSheet(
-            """
-            QTextEdit#taskDisplay { 
-                background-color: #666666; 
-                border-radius: 8px; 
-                padding: 8px 12px; 
-                font-size: 13px; 
-                color: #999999; 
-            }
-        """
-        )
-
-        self.start_button.setStyleSheet(
-            """
-            #startButton {
-                background-color: #666666;
-                color: #999999;
-                font-size: 14px;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-weight: 600;
-                min-width: 40px;
-            }
-        """
-        )
-
-    def enable_ui_after_rating(self):
-        """Re-enable all UI elements after rating is complete"""
-        # Re-enable task display and start button
-        self.task_display.setEnabled(True)
-        self.start_button.setEnabled(True)
-
-        # Reset to default styling
-        self.task_display.setStyleSheet("")
-        self.start_button.setStyleSheet("")
 
     def on_intention_selected(self, intention, record):
         """Handle intention selection from timeline"""
