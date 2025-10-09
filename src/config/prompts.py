@@ -4,6 +4,93 @@ All prompts are defined here as Python variables for easy modification
 """
 
 
+def _infer_language(task_name: str) -> str:
+    """
+    Lightweight language hint based on the intention text.
+    Inspects Unicode ranges / characteristic characters to guess the language
+    for a handful of common scripts. Falls back to English when uncertain.
+    """
+    if not task_name:
+        return "English"
+
+    def _has_char_in_ranges(ranges):
+        for ch in task_name:
+            code = ord(ch)
+            for start, end in ranges:
+                if start <= code <= end:
+                    return True
+        return False
+
+    # Hangul
+    if _has_char_in_ranges(
+        [
+            (0xAC00, 0xD7A3),  # Hangul syllables
+            (0x1100, 0x11FF),  # Hangul Jamo
+            (0x3130, 0x318F),  # Hangul Compatibility Jamo
+        ]
+    ):
+        return "Korean"
+
+    # Japanese (Hiragana / Katakana)
+    if _has_char_in_ranges(
+        [
+            (0x3040, 0x309F),  # Hiragana
+            (0x30A0, 0x30FF),  # Katakana
+            (0x31F0, 0x31FF),  # Katakana Phonetic Extensions
+        ]
+    ):
+        return "Japanese"
+
+    # Chinese (CJK Unified Ideographs)
+    if _has_char_in_ranges([(0x4E00, 0x9FFF)]):
+        return "Chinese"
+
+    # Russian / Cyrillic languages
+    if _has_char_in_ranges([(0x0400, 0x052F)]):
+        return "Russian"
+
+    # Arabic
+    if _has_char_in_ranges(
+        [
+            (0x0600, 0x06FF),
+            (0x0750, 0x077F),
+            (0x08A0, 0x08FF),
+        ]
+    ):
+        return "Arabic"
+
+    # Hindi (Devanagari)
+    if _has_char_in_ranges([(0x0900, 0x097F)]):
+        return "Hindi"
+
+    # Thai
+    if _has_char_in_ranges([(0x0E00, 0x0E7F)]):
+        return "Thai"
+
+    # Greek
+    if _has_char_in_ranges([(0x0370, 0x03FF)]):
+        return "Greek"
+
+    # Hebrew
+    if _has_char_in_ranges([(0x0590, 0x05FF)]):
+        return "Hebrew"
+
+    # Basic checks for a few Latin languages using common accented characters
+    lowered = task_name.lower()
+    if any(ch in lowered for ch in "áéíóúñ" "¿¡"):  # Spanish markers
+        return "Spanish"
+    if any(ch in lowered for ch in "àâçéèêîôûùëï" "œ" "æ"):  # French markers
+        return "French"
+    if any(ch in lowered for ch in "äöüß" "ä" "ö" "ü"):  # German markers
+        return "German"
+    if any(ch in lowered for ch in "ãõçáéíóú" "âêô" "à" "é" "ê" "ô" "ç" "ã" "õ"):  # Portuguese markers
+        return "Portuguese"
+    if any(ch in lowered for ch in "èéìíîòóùú" "à" "è" "ì" "ò" "ù"):  # Italian markers
+        return "Italian"
+
+    return "English"
+
+
 # General instruction for all prompts
 GENERAL_INSTRUCTION = """[General Instruction]
 You are a friendly AI coach with balanced sensitivity to task focus and a neutral communication style. 
@@ -189,7 +276,7 @@ Low score of output indiates that you judged that the user's activity aligns wit
 Now, reflect on why the user might have expressed such feedback. 
 Think about what **implicit intention** or subtle task-related reasoning the user might have had, which you did not consider. 
 Then, build a policy adjustment strategy to better align your future judgments with the user's task.
-Esepcailly, the policy adjustment should follow the format of "Output high/low alignment (low/high score output) for [specific activity with detailed contents] when detected"
+Esepcailly, the policy adjustment should follow the format of "Output high/l ow alignment (low/high score output) for [specific activity with detailed contents] when detected"
 
 Respond in **JSON format** with two keys:
 - "analysis_assistant_response": judge whether your previous response was whether high alignment (low output score) or low alignment (high output score) with the user's intention.
@@ -201,7 +288,8 @@ Only return the JSON object. Do not include any explanation or prefix text"""
 
 MESSAGE_INSTRUCTION = """
 [Message Language]
-Respond in English.
+intention: {task_name}
+Respond in {language}.
 
 [Important Notes for Message Generation]
 When multiple programs are visible, assume the 'frontmost app info' is the user's main focus and generate your message accordingly.
@@ -318,7 +406,11 @@ def build_intention_analysis_prompt(
     prompt_text += "}\n\n"
 
     if message_to_user:
-        prompt_text += MESSAGE_INSTRUCTION + "\n\n"
+        language_hint = _infer_language(task_name)
+        prompt_text += (
+            MESSAGE_INSTRUCTION.format(task_name=task_name, language=language_hint)
+            + "\n\n"
+        )
 
     # Add important rules
     prompt_text += IMPORTANT_RULES

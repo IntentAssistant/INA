@@ -32,7 +32,6 @@ from ..config.api_config import (
     get_api_config_manager,
     API_CONFIG,
 )
-from ..logging.storage import LocalStorage
 
 
 class DisplayHighlightWindow(QWidget):
@@ -320,58 +319,8 @@ class UnifiedSettingsDialog(QDialog):
         window_group.setLayout(window_layout)
         layout.addWidget(window_group)
 
-        # Diagnostics group
-        debug_group = QGroupBox("Diagnostics")
-        debug_layout = QVBoxLayout()
-
-        self.save_debug_checkbox = QCheckBox("Save analysis screenshots to disk")
-        debug_enabled = self.api_manager.get_debug_save_images()
-        self.save_debug_checkbox.setChecked(debug_enabled)
-        self.save_debug_checkbox.stateChanged.connect(self.on_save_debug_images_changed)
-        debug_layout.addWidget(self.save_debug_checkbox)
-
-        debug_info = QLabel(
-            "When enabled, the app will write each captured screenshot to disk for inspection."
-        )
-        debug_info.setStyleSheet("color: #888888;")
-        debug_layout.addWidget(debug_info)
-
-        self.open_debug_folder_button = QPushButton("Open Debug Folder")
-        self.open_debug_folder_button.clicked.connect(self.open_debug_folder)
-        self.open_debug_folder_button.setEnabled(debug_enabled)
-        debug_layout.addWidget(self.open_debug_folder_button)
-
-        debug_group.setLayout(debug_layout)
-        layout.addWidget(debug_group)
-
         layout.addStretch()
         return page
-    def on_save_debug_images_changed(self, state):
-        """Handle toggling of debug screenshot saving"""
-        enabled = state == Qt.CheckState.Checked
-        self.api_manager.set_debug_save_images(enabled)
-        if hasattr(self, "open_debug_folder_button"):
-            self.open_debug_folder_button.setEnabled(enabled)
-
-    def open_debug_folder(self):
-        """Open the debug image directory in the system file browser"""
-        storage = getattr(self.app, "storage", None)
-        if storage is None:
-            storage = LocalStorage()
-
-        debug_dir = storage.get_debug_image_dir()
-        os.makedirs(debug_dir, exist_ok=True)
-
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(debug_dir)):
-            try:
-                if sys.platform.startswith("darwin"):
-                    subprocess.Popen(["open", debug_dir])
-                elif os.name == "nt":
-                    os.startfile(debug_dir)  # type: ignore[attr-defined]
-                else:
-                    subprocess.Popen(["xdg-open", debug_dir])
-            except Exception as e:
-                print(f"[SETTINGS] Failed to open debug folder: {e}")
 
     def create_models_page(self):
         """Create Models settings page (includes API configuration)"""

@@ -443,16 +443,6 @@ class ThreadManager(QObject):
 
             self.last_response_image_id = image_id  # Store for feedback reference
 
-            if get_api_config_manager().get_debug_save_images():
-                try:
-                    debug_dir = self.storage.get_debug_image_dir()
-                    file_path = os.path.join(debug_dir, f"{timestamp}.jpg")
-                    with open(file_path, "wb") as f:
-                        f.write(self.current_screenshot_data)
-                    print(f"[DEBUG_CAPTURE] Saved screenshot to {file_path}")
-                except Exception as debug_error:
-                    print(f"[DEBUG_CAPTURE] Failed to save screenshot: {debug_error}")
-
             # Add to image cache for feedback (keep last 10 images)
             self.image_cache.append(
                 {
