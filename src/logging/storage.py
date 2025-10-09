@@ -12,6 +12,7 @@ class LocalStorage:
         self.user_name = "unknown"
         self.task_name = "N/A (no_task)"
         self.task_start_time = None  # 시간 추가
+        self._session_dir_override = None
         # Ensure all required files exist after directory setup
         self.ensure_required_files()
 
@@ -93,10 +94,12 @@ class LocalStorage:
         if session_id:
             # Use provided session_id directly
             self.task_start_time = session_id
+            self._session_dir_override = session_id
             print(f"[STORAGE] Using provided session_id: {session_id}")
         else:
             # Fallback: generate timestamp (for backward compatibility)
             self.task_start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self._session_dir_override = None
             print(f"[STORAGE] Generated new timestamp: {self.task_start_time}")
 
         session_dir = self.get_capture_dir()
@@ -105,6 +108,8 @@ class LocalStorage:
 
     def get_capture_dir(self):
         """Return the directory path for storing captures"""
+        if self._session_dir_override:
+            return os.path.join(self.storage_dir, self._session_dir_override)
         if not ("N/A (no_task)" in self.task_name) and self.task_start_time:
             return os.path.join(
                 self.storage_dir, f"{self.task_name}_{self.task_start_time}"
