@@ -184,6 +184,9 @@ class Dashboard(QWidget):
 
         # Initialize state variables
         self._current_task = ""
+        self.current_clarification_data = []
+        self.loaded_clarification_snapshot = None
+        self.loaded_reflection_snapshot = []
         self.clarification_conversation = []
         self.is_capturing = False
         self.history_timer = QTimer()
@@ -807,8 +810,14 @@ class Dashboard(QWidget):
 
         # Clear previous clarification data when setting new task
         self.current_clarification_data = []
+        self.loaded_clarification_snapshot = None
+        self.loaded_reflection_snapshot = []
+        self.current_reflection_intentions = []
+        self.current_reflection_rules = []
         if hasattr(self, "thread_manager"):
             self.thread_manager.clear_clarification_data()
+            self.thread_manager.clear_reflection_data()
+            self.thread_manager.clear_reflection_rule()
         if hasattr(self, "llm_client") and hasattr(
             self.llm_client, "clarification_manager"
         ):
@@ -831,8 +840,14 @@ class Dashboard(QWidget):
 
         # Clear clarification data when returning to input state (user will set new intention)
         self.current_clarification_data = []
+        self.loaded_clarification_snapshot = None
+        self.loaded_reflection_snapshot = []
+        self.current_reflection_intentions = []
+        self.current_reflection_rules = []
         if hasattr(self, "thread_manager"):
             self.thread_manager.clear_clarification_data()
+            self.thread_manager.clear_reflection_data()
+            self.thread_manager.clear_reflection_rule()
         if hasattr(self, "llm_client") and hasattr(
             self.llm_client, "clarification_manager"
         ):
@@ -945,6 +960,9 @@ class Dashboard(QWidget):
                 print(
                     f"[DEBUG] Using existing session_id: {self.current_session_start_time}"
                 )
+
+            # Persist any loaded history context into the new session snapshot
+            self._persist_loaded_context()
 
             # Handle clarification data
             if self.current_clarification_data:
@@ -1203,7 +1221,6 @@ class Dashboard(QWidget):
                 except Exception as e:
                     print(f"[ERROR] Failed to format record: {e}")
                     continue
-
 
             # If no records exist, ensure UI is still properly initialized
             if not today_records:
@@ -2169,7 +2186,7 @@ class Dashboard(QWidget):
             self.load_clarification_for_intention(intention, record)
 
             # Load reflection data
-            self.load_reflection_for_intention(intention)
+            self.load_reflection_for_intention(intention, record)
 
             print(f"[DASHBOARD] Loaded past settings for: {intention}")
 
@@ -2209,108 +2226,264 @@ class Dashboard(QWidget):
                 storage.get_clarification_data_dir(), clarification_file
             )
 
+            self.loaded_clarification_snapshot = None
+
             if os.path.exists(clarification_path):
                 with open(clarification_path, "r", encoding="utf-8") as f:
                     clarification_data_raw = json.load(f)
 
-                # Extract the augmented intentions list from the dict
+                clarification_data = []
+                snapshot_payload = None
                 if isinstance(clarification_data_raw, dict):
                     clarification_data = clarification_data_raw.get(
                         "augmented_intentions", []
                     )
+                    if not clarification_data:
+                        # Fallback to clarification Q&A text if available
+                        qa_text = clarification_data_raw.get("clarification_QAs")
+                        if qa_text:
+                            clarification_data = [qa_text]
+                    snapshot_payload = clarification_data_raw
                     print(
                         f"[DASHBOARD] Extracted {len(clarification_data)} clarification intentions from dict"
                     )
                 elif isinstance(clarification_data_raw, list):
                     clarification_data = clarification_data_raw
+                    snapshot_payload = {"augmented_intentions": clarification_data_raw}
                 else:
                     print(
                         f"[DASHBOARD] Unexpected clarification data type: {type(clarification_data_raw)}"
                     )
-                    clarification_data = []
 
-                # Set clarification data in thread manager
-                if hasattr(self, "thread_manager") and clarification_data:
-                    self.thread_manager.set_clarification_data(clarification_data)
-                    print(
-                        f"[DASHBOARD] Loaded clarification data for: {intention} (file: {clarification_file})"
-                    )
+                self.loaded_clarification_snapshot = snapshot_payload
+                self.current_clarification_data = clarification_data or []
+
+                if hasattr(self, "thread_manager"):
+                    if clarification_data:
+                        self.thread_manager.set_clarification_data(clarification_data)
+                        print(
+                            f"[DASHBOARD] Loaded clarification data for: {intention} (file: {clarification_file})"
+                        )
+                    else:
+                        self.thread_manager.clear_clarification_data()
+                        print(
+                            f"[DASHBOARD] Cleared clarification data (no augmented intentions found)"
+                        )
             else:
                 print(f"[DASHBOARD] No clarification file found: {clarification_file}")
+                self.current_clarification_data = []
+                self.loaded_clarification_snapshot = None
+                if hasattr(self, "thread_manager"):
+                    self.thread_manager.clear_clarification_data()
 
         except Exception as e:
             print(f"[ERROR] Failed to load clarification data: {e}")
 
-    def load_reflection_for_intention(self, intention):
+    def load_reflection_for_intention(self, intention, record=None):
         """Load reflection/feedback data for a specific intention"""
         try:
             from ..logging.storage import LocalStorage
 
             storage = LocalStorage()
 
-            # Clean task name for filename
             clean_task_name = "".join(
                 c for c in intention if c.isalnum() or c in (" ", "-", "_")
             ).rstrip()
             clean_task_name = clean_task_name.replace(" ", "_")
 
-            # Try to load different types of reflection data files
-            reflection_files = [
-                f"{clean_task_name}_dislike_on_notification.json",
-                f"{clean_task_name}_dislike_on_focus.json",
-                f"{clean_task_name}_like_on_notification.json",
-                f"{clean_task_name}_like_on_focus.json",
-            ]
+            session_candidates = []
 
-            reflection_data = {
-                "dislike_on_notification": [],
-                "dislike_on_focus": [],
-                "like_on_notification": [],
-                "like_on_focus": [],
+            if record and record.get("session_id"):
+                session_candidates.append(record["session_id"])
+
+            session_base = storage.get_session_data_dir()
+            try:
+                for entry in os.listdir(session_base):
+                    if entry.startswith(clean_task_name):
+                        session_candidates.append(entry)
+            except FileNotFoundError:
+                pass
+
+            # Deduplicate while preserving order
+            seen_sessions = set()
+            ordered_sessions = []
+            for session_id in session_candidates:
+                if session_id and session_id not in seen_sessions:
+                    seen_sessions.add(session_id)
+                    ordered_sessions.append(session_id)
+
+            reflection_intentions = []
+            reflection_rules = []
+            intention_seen = set()
+            rule_seen = set()
+            unique_reflections = {}
+
+            adjustment_map = {
+                "focused_good": "Output high alignment (low output distraction score 0.0)",
+                "focused_bad": "Output low alignment (high output distraction score 1.0)",
+                "distracted_good": "Output lower alignment (high output distraction score 1.0)",
+                "distracted_bad": "Output high alignment (low output distractionscore 0.0)",
             }
 
-            reflection_types = [
-                "dislike_on_notification",
-                "dislike_on_focus",
-                "like_on_notification",
-                "like_on_focus",
-            ]
-
-            # Load each type of reflection data if file exists
-            loaded_count = 0
-            for i, filename in enumerate(reflection_files):
-                file_path = os.path.join(storage.get_clarification_data_dir(), filename)
-                if os.path.exists(file_path):
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            reflection_data[reflection_types[i]] = data
-                            loaded_count += 1
-                    except Exception as e:
-                        print(f"[ERROR] Failed to load {filename}: {e}")
-
-            # Set reflection data in thread manager
-            if hasattr(self, "thread_manager"):
-                self.thread_manager.set_dislike_on_notification(
-                    reflection_data["dislike_on_notification"]
+            for session_id in ordered_sessions:
+                reflection_path = os.path.join(
+                    session_base, session_id, "_reflections.json"
                 )
-                self.thread_manager.set_dislike_on_focus(
-                    reflection_data["dislike_on_focus"]
-                )
-                self.thread_manager.set_like_on_notification(
-                    reflection_data["like_on_notification"]
-                )
-                self.thread_manager.set_like_on_focus(reflection_data["like_on_focus"])
+                if not os.path.exists(reflection_path):
+                    continue
 
-                if loaded_count > 0:
+                try:
+                    with open(reflection_path, "r", encoding="utf-8") as f:
+                        entries = json.load(f)
+                except Exception as e:
                     print(
-                        f"[DASHBOARD] Loaded {loaded_count} reflection data files for: {intention}"
+                        f"[ERROR] Failed to load reflection file {reflection_path}: {e}"
                     )
+                    continue
+
+                for entry in entries:
+                    container = entry.get("reflection", {})
+                    feedback_case = container.get("feedback_case")
+                    reflection_payload = container.get("reflection", {})
+
+                    activity = reflection_payload.get("user_activity_description")
+                    implicit = reflection_payload.get(
+                        "user_implicit_intention_prediction"
+                    )
+
+                    if not activity or not implicit:
+                        continue
+
+                    intention_str = f"{implicit} (Relevant activity: {activity})"
+                    key = (implicit, activity)
+                    if key not in intention_seen:
+                        intention_seen.add(key)
+                        reflection_intentions.append(intention_str)
+                        unique_reflections[key] = {
+                            "feedback_case": feedback_case or "imported",
+                            "user_activity_description": activity,
+                            "user_implicit_intention_prediction": implicit,
+                        }
+
+                    adjustment = adjustment_map.get(
+                        feedback_case, "Adjust alignment appropriately"
+                    )
+                    rule_str = f"{adjustment} when detecting activity - {activity}"
+                    if rule_str not in rule_seen:
+                        rule_seen.add(rule_str)
+                        reflection_rules.append(rule_str)
+
+            self.current_reflection_intentions = reflection_intentions
+            self.current_reflection_rules = reflection_rules
+
+            self.loaded_reflection_snapshot = list(unique_reflections.values())
+
+            if hasattr(self, "thread_manager"):
+                if reflection_intentions:
+                    self.thread_manager.set_reflection_data(reflection_intentions)
                 else:
-                    print(f"[DASHBOARD] No reflection data found for: {intention}")
+                    self.thread_manager.clear_reflection_data()
+
+                if reflection_rules:
+                    self.thread_manager.set_reflection_rule(reflection_rules)
+                else:
+                    self.thread_manager.clear_reflection_rule()
+
+            if reflection_intentions or reflection_rules:
+                print(
+                    f"[DASHBOARD] Loaded {len(reflection_intentions)} reflection intentions and {len(reflection_rules)} rules"
+                )
+            else:
+                print(f"[DASHBOARD] No reflection data found for: {intention}")
 
         except Exception as e:
             print(f"[ERROR] Failed to load reflection data: {e}")
+            self.loaded_reflection_snapshot = []
+
+    def _persist_loaded_context(self):
+        """Persist loaded clarification/reflection context into the new session directory"""
+        try:
+            session_id = getattr(self, "current_session_start_time", None)
+            if not session_id:
+                return
+
+            from ..logging.storage import LocalStorage
+
+            storage = LocalStorage()
+
+            # Persist clarification snapshot if present
+            if self.loaded_clarification_snapshot:
+                clarification_payload = self.loaded_clarification_snapshot
+                if isinstance(clarification_payload, list):
+                    clarification_payload = {
+                        "augmented_intentions": clarification_payload
+                    }
+
+                if isinstance(
+                    clarification_payload, dict
+                ) and clarification_payload.get("augmented_intentions"):
+                    clarification_path = os.path.join(
+                        storage.get_clarification_data_dir(),
+                        f"{session_id}_clarification.json",
+                    )
+                    if not os.path.exists(clarification_path):
+                        try:
+                            with open(clarification_path, "w", encoding="utf-8") as f:
+                                json.dump(
+                                    clarification_payload,
+                                    f,
+                                    ensure_ascii=False,
+                                    indent=2,
+                                )
+                            print(
+                                f"[DASHBOARD] Persisted clarification snapshot for session {session_id}"
+                            )
+                        except Exception as e:
+                            print(
+                                f"[ERROR] Failed to persist clarification snapshot: {e}"
+                            )
+
+            # Persist reflection snapshot if present
+            if self.loaded_reflection_snapshot:
+                session_dir = os.path.join(storage.get_session_data_dir(), session_id)
+                os.makedirs(session_dir, exist_ok=True)
+                reflection_path = os.path.join(session_dir, "_reflections.json")
+                if not os.path.exists(reflection_path):
+                    entries = []
+                    now_iso = datetime.now().isoformat()
+                    for record in self.loaded_reflection_snapshot:
+                        activity = record.get("user_activity_description")
+                        implicit = record.get("user_implicit_intention_prediction")
+                        if not activity or not implicit:
+                            continue
+                        entry = {
+                            "timestamp": now_iso,
+                            "reflection": {
+                                "task_name": self._current_task,
+                                "session_start_time": session_id,
+                                "feedback_case": record.get(
+                                    "feedback_case", "imported"
+                                ),
+                                "reflection": {
+                                    "user_activity_description": activity,
+                                    "user_implicit_intention_prediction": implicit,
+                                },
+                            },
+                        }
+                        entries.append(entry)
+
+                    if entries:
+                        try:
+                            with open(reflection_path, "w", encoding="utf-8") as f:
+                                json.dump(entries, f, ensure_ascii=False, indent=2)
+                            print(
+                                f"[DASHBOARD] Persisted {len(entries)} reflection entries for session {session_id}"
+                            )
+                        except Exception as e:
+                            print(f"[ERROR] Failed to persist reflection snapshot: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] Persisting loaded context failed: {e}")
 
     def disable_clarification_input(self):
         """Disable the clarification input field and send button after 2 turns"""
@@ -2351,9 +2524,7 @@ class Dashboard(QWidget):
         """Enable the clarification input field and send button for new clarification"""
         if hasattr(self, "clarification_input"):
             self.clarification_input.setEnabled(True)
-            self.clarification_input.setPlaceholderText(
-                CLARIFICATION_PLACEHOLDER_TEXT
-            )
+            self.clarification_input.setPlaceholderText(CLARIFICATION_PLACEHOLDER_TEXT)
             self.clarification_input.setStyleSheet(
                 """
                 #clarificationInput {

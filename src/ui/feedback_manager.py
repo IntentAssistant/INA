@@ -860,32 +860,63 @@ class FeedbackManager(QObject):
                 print("[FEEDBACK] No dashboard available for storing learning data")
                 return
 
-            user_activity_description = reflection["user_activity_description"]
-            user_implicit_intention_prediction = reflection[
+            user_activity_description = reflection.get("user_activity_description")
+            user_implicit_intention_prediction = reflection.get(
                 "user_implicit_intention_prediction"
-            ]
-            # assistant_policy_adjustment = reflection["assistant_policy_adjustment"]
+            )
+            assistant_policy_adjustment = reflection.get(
+                "assistant_policy_adjustment"
+            )
 
+            # Normalize adjustment text to explicit numeric instructions
             if feedback_case == "focused_good":
                 assistant_policy_adjustment = (
-                    "Output higher alignment (lower output score)"
+                    assistant_policy_adjustment
+                    or "Output high alignment (score 0.0)"
                 )
+                target_score = "0.0"
             elif feedback_case == "focused_bad":
-                assistant_policy_adjustment = "Output low alignment (high output score)"
+                assistant_policy_adjustment = (
+                    assistant_policy_adjustment
+                    or "Output low alignment (score 1.0)"
+                )
+                target_score = "1.0"
             elif feedback_case == "distracted_good":
                 assistant_policy_adjustment = (
-                    "Output lower alignment (higher output score)"
+                    assistant_policy_adjustment
+                    or "Output low alignment (score 1.0)"
                 )
+                target_score = "1.0"
             elif feedback_case == "distracted_bad":
-                assistant_policy_adjustment = "Output high alignment (low output score)"
+                assistant_policy_adjustment = (
+                    assistant_policy_adjustment
+                    or "Output high alignment (score 0.0)"
+                )
+                target_score = "0.0"
+            else:
+                target_score = "Unknown"
 
-            learned_intention = f"{user_implicit_intention_prediction} (Relevant activity: {user_activity_description})"
-            learned_rule = f"{assistant_policy_adjustment} when detecting activity - {user_activity_description}"
+            learned_intention = (
+                f"{user_implicit_intention_prediction} -> score {target_score} "
+                f"(activity: {user_activity_description})"
+            )
+            learned_rule = (
+                f"{assistant_policy_adjustment} when detecting activity - {user_activity_description}"
+            )
 
             self.dashboard.current_reflection_intentions.append(learned_intention)
             print(
                 f"[FEEDBACK] Added reflection intentions. Total: {len(self.dashboard.current_reflection_intentions)}"
             )
+            # Maintain snapshot for persistence when sessions start from history
+            imported_record = {
+                "feedback_case": feedback_case,
+                "user_activity_description": user_activity_description,
+                "user_implicit_intention_prediction": user_implicit_intention_prediction,
+                "assistant_policy_adjustment": assistant_policy_adjustment,
+            }
+            if hasattr(self.dashboard, "loaded_reflection_snapshot"):
+                self.dashboard.loaded_reflection_snapshot.append(imported_record)
             if hasattr(self.dashboard, "thread_manager"):
                 self.dashboard.thread_manager.set_reflection_data(
                     self.dashboard.current_reflection_intentions

@@ -83,7 +83,9 @@ def _infer_language(task_name: str) -> str:
         return "French"
     if any(ch in lowered for ch in "äöüß" "ä" "ö" "ü"):  # German markers
         return "German"
-    if any(ch in lowered for ch in "ãõçáéíóú" "âêô" "à" "é" "ê" "ô" "ç" "ã" "õ"):  # Portuguese markers
+    if any(
+        ch in lowered for ch in "ãõçáéíóú" "âêô" "à" "é" "ê" "ô" "ç" "ã" "õ"
+    ):  # Portuguese markers
         return "Portuguese"
     if any(ch in lowered for ch in "èéìíîòóùú" "à" "è" "ì" "ò" "ù"):  # Italian markers
         return "Italian"
@@ -267,7 +269,8 @@ Therefore, you should reflect and output an implicit intention of the user, such
 {stated_intention}
 
 [Your Response]
-Low score of output indiates that you judged that the user's activity aligns with the user's intention.
+Low distraction score of output(0.0) indicates that you judged that the user's activity aligns with the user's intention.
+High distraction score of output(1.0) indicates that you judged that the user's activity does not align with the user's intention.
 {assistant_response}
 
 [User Feedback]
@@ -276,10 +279,10 @@ Low score of output indiates that you judged that the user's activity aligns wit
 Now, reflect on why the user might have expressed such feedback. 
 Think about what **implicit intention** or subtle task-related reasoning the user might have had, which you did not consider. 
 Then, build a policy adjustment strategy to better align your future judgments with the user's task.
-Esepcailly, the policy adjustment should follow the format of "Output high/l ow alignment (low/high score output) for [specific activity with detailed contents] when detected"
+Esepcailly, the policy adjustment should follow the format of "Output high/l ow alignment (low/high distraction score output) for [specific activity with detailed contents] when detected"
 
 Respond in **JSON format** with two keys:
-- "analysis_assistant_response": judge whether your previous response was whether high alignment (low output score) or low alignment (high output score) with the user's intention.
+- "analysis_assistant_response": judge whether your previous response was whether high alignment (low output distraction score 0.0) or low alignment (high output distraction score 1.0) with the user's intention.
 - "user_activity_description": a short sentence describing the activity shown in the screen image in noun form (e.g., "YouTube homepage with diverse video thumbnails", within 20 words).
 - "analysis_user_feedback": two short sentences (within 10 words each) explaining what/why the user liked/disliked on your judgement of alignment. (e.g., "User expressed good/bad. The reason is because...")
 - "user_implicit_intention_prediction": a short sentence (within 10 words) predicting an implicit intention of the user that aligns with the user's current activity, starting with a verb (e.g., "Watch review before purchase")

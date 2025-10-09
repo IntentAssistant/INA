@@ -163,6 +163,11 @@ class LocalStorage:
         """Return the directory path for storing clarification data"""
         return self.clarification_data_dir
 
+    def get_session_data_dir(self):
+        """Return the base directory path for session data"""
+        os.makedirs(self.session_data_dir, exist_ok=True)
+        return self.session_data_dir
+
     def save_reflection_data(self, reflection_data: dict):
         """Save reflection data to a JSON log file - simple version without rotation"""
         entry = {"timestamp": self.get_timestamp(), "reflection": reflection_data}
