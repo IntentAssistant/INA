@@ -54,3 +54,5 @@ build/
 aim_env/
 # Ignore release artifacts
 *.dmg
+
+*.dmg
