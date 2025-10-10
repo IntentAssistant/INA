@@ -1,234 +1,163 @@
-# AIM (Aligned Intention Monitoring)
+# INA (Intentional Computing Assistant)
 
-AIM is an AI-powered focus management application that helps users practice intentional computing by monitoring the alignment between their activities and intentions. It captures screens periodically and analyzes whether the user's current activity aligns with their set goals using LLM analysis, providing real-time feedback.
+**Intent Assistant (INA)** is an experimental platform for our ongoing research on aligned intention monitoring.  
 
-## Key Features
+- ⬇️ **Download the latest macOS build:** [`INA-v0.5.0.dmg`](INA-v0.5.0.dmg)
 
-- **Real-time Screen Analysis**: Periodically captures screens and analyzes current activities
-- **AI-powered Intent Analysis**: Uses LLM to analyze alignment between user activities and set goals
-- **3 App Modes**: Supports FULL(Purple), REMINDER(Blue), and BASIC(Orange) modes
-- **Real-time Feedback**: Provides immediate notifications and advice based on focus levels
-- **Learning System**: Improves analysis accuracy through user feedback
-- **Multi-language Support**: Supports Korean/English UI
-- **Session Management**: Tracks work sessions and manages history
+The source code accompanies our forthcoming publication and project site:
 
-## Software Architecture
+- 📄 ArXiv preprint: _(link coming soon)_  
+- 🌐 Project page: _(link coming soon)_
 
-### Overall System Architecture
+INA is a macOS assistant that helps you stay aligned with your stated intentions.  
+It captures the current screen (with your permission), analyzes the context using an LLM, and gives lightweight nudges when your activity drifts away from the task you set for yourself. User feedback is looped back into the model prompts so the system learns your personal notion of “on task”.
 
-```mermaid
-graph TB
-    subgraph "Entry Point"
-        A[main.py]
-    end
-    
-    subgraph "Core Application"
-        B[IntentionalComputingApp<br/>rumps.App]
-        C[ThreadManager<br/>Core Logic]
-    end
-    
-    subgraph "UI Layer"
-        D[Dashboard<br/>PyQt6 UI]
-        E[Menu<br/>macOS Menu Bar]
-        F[Notification<br/>System Notifications]
-        G[Dialogs<br/>Settings & Popups]
-    end
-    
-    subgraph "Analysis Engine"
-        H[LLM Analysis<br/>Image + Context]
-        I[Activity Monitor<br/>App & URL Tracking]
-        J[Screen Capture<br/>Periodic Screenshots]
-    end
-    
-    subgraph "Data Management"
-        K[Local Storage<br/>SQLite + Files]
-        L[User Config<br/>JSON Settings]
-        M[Prompt Config<br/>LLM Prompts]
-        N[Cloud Upload<br/>Optional Sync]
-    end
-    
-    subgraph "External Services"
-        O[LLM API Endpoint<br/>Current: Separate Backend Required<br/>Future: Direct API Key Integration]
-    end
-    
-    A --> B
-    B --> C
-    B --> D
-    B --> E
-    C --> F
-    C --> G
-    C --> H
-    C --> I
-    C --> J
-    H --> O
-    C --> K
-    C --> L
-    C --> M
-    K --> N
-    
-    D -.-> C
-    E -.-> C
-    F -.-> C
-    G -.-> C
-```
+> This repository is the open-source release of the original KAIST AI research prototype (often referred to as AIM).  
+> Everything runs locally on your Mac and talks directly to the LLM provider you configure—no backend server required.
 
-### Detailed Module Structure
+---
 
-```mermaid
-graph LR
-    subgraph "src/"
-        subgraph "config/"
-            A1[constants.py<br/>App Configuration Constants]
-            A2[user_config.py<br/>User Settings]
-            A3[prompt_config.py<br/>LLM Prompts]
-            A4[language.py<br/>Multi-language Support]
-        end
-        
-        subgraph "ui/"
-            B1[dashboard.py<br/>Main UI]
-            B2[menu.py<br/>Menu Bar]
-            B3[notification.py<br/>Notification System]
-            B4[dialogs.py<br/>Settings Dialogs]
-            B5[feedback_manager.py<br/>Feedback Processing]
-            B6[history_manager.py<br/>Session History]
-        end
-        
-        subgraph "utils/"
-            C1[activity.py<br/>App/URL Detection]
-            C2[llm_analysis.py<br/>LLM Communication]
-            C3[image_comparison.py<br/>Image Processing]
-            C4[screen_lock_detector.py<br/>Screen Lock Detection]
-        end
-        
-        subgraph "logging/"
-            D1[storage.py<br/>Local Storage]
-            D2[cloud.py<br/>Cloud Upload]
-        end
-        
-        E1[app.py<br/>Main Application]
-        E2[manager.py<br/>Thread Manager]
-    end
-```
+## Highlights
+- **Real-time activity checks** – grabs a scaled screenshot every few seconds and classifies the activity with an LLM.
+- **Direct LLM integration** – works with OpenAI GPT-4o family or Google Gemini via API keys you provide.
+- **Feedback-aware learning** – thumbs-up / thumbs-down responses trigger reflection prompts that refine future judgments.
+- **All-local storage** – screenshots stay in RAM; logs, JSON traces, and configuration files live under `~/INA_Data` and `~/.intention_app`.
+- **macOS-native UI** – PyQt6 dashboard with Rubicon-ObjC bridges for menu bar integration, screen-capture privacy, and notification control.
 
-### Data Flow
+---
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant D as Dashboard
-    participant M as ThreadManager
-    participant C as Screen Capture
-    participant L as LLM Analysis
-    participant S as Storage
-    participant N as Notification
-    
-    U->>D: Set Goal & Start
-    D->>M: Request Capture Start
-    
-    loop Periodic Analysis (2 second intervals)
-        M->>C: Capture Screen
-        C->>M: Return Screenshot
-        M->>L: Request LLM Analysis (Image + Context)
-        L-->>LLM API: Analysis Request
-        LLM API-->>L: Focus Score & Message
-        L->>M: Return Analysis Result
-        M->>S: Store Result
-        M->>N: Show Notification if Needed
-        N->>U: Feedback Notification
-    end
-    
-    U->>D: Provide Feedback (👍/👎)
-    D->>M: Send Feedback
-    M->>S: Store Learning Data
-```
+## Repository Layout
 
-## How to Run
+| Path | What it contains |
+| --- | --- |
+| `src/app.py` | Entry point for the PyQt dashboard, notification manager, and capture/LLM loops. |
+| `src/ui/` | All widgets (dashboard, dialogs, settings, notifications) and the feedback/reflection manager. |
+| `src/config/` | App constants, prompt templates, and the API configuration manager that persists user settings. |
+| `src/utils/` | Screen/app detection helpers, direct LLM clients, launch-at-login helpers, etc. |
+| `src/logging/` | Local storage utilities writing `_llm_results.json`, `_feedbacks.json`, `_reflections.json`, etc. |
+| `google/` | Namespace stub so py2app can bundle Google’s `google-genai` package (see below). |
+| `rubicon/` | Namespace stub so py2app can bundle `rubicon-objc` (macOS Objective‑C bridge). |
+| `setup.py` | py2app configuration used to create a standalone `.app`. |
+| `build_dmg.sh`, `create_dmg_background.py` | Convenience scripts for producing a DMG release. |
+| `architecture.md` | Extra diagrams and notes on the overall system design. |
 
+### Why the `google/` and `rubicon/` folders exist
+Both directories only contain a minimal `__init__.py`. They make py2app treat Google’s namespace packages (`google.genai`) and Rubicon’s Objective‑C bridge (`rubicon.objc`) as regular packages during bundling. **Do not delete them** unless you replace them with an equivalent packaging shim—without them, the packaged app will crash at runtime with `ModuleNotFoundError`.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- macOS 10.15 (Catalina) or later
+- Python 3.9 or later (3.11 recommended)
+- Command-line tools: `xcode-select --install`
+
+### Set up a virtual environment
 ```bash
-# Install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
+```
 
-# Run application
+### Run the app
+```bash
 python main.py
 ```
 
-## System Requirements
+On first launch the app requests macOS permissions for **Screen Recording**, **Accessibility**, and **Notifications**.  
+Grant them via System Settings so that the dashboard can observe the screen and show nudges.
 
-- **OS**: macOS 10.15 or later
-- **Python**: 3.8 or later
-- **Required Permissions**: 
-  - Screen Recording Permission
-  - Accessibility Permission
-  - Notification Permission
-
-## Configuration
-
-### API Keys Setup
-
-AIM now supports direct LLM API integration! No separate backend server required.
-
-#### In-App Configuration (Recommended)
-
-The easiest way to configure API settings is through the built-in settings interface:
-
-1. **Launch AIM** - If no API keys are configured, you'll see a welcome dialog
-2. **Click "Configure Now"** or access it later via **Settings > User Settings > Configure API Settings**
-3. **Choose your provider** (OpenAI GPT or Google Gemini)
-4. **Enter your API key** and select a model
-5. **Test your configuration** using the built-in validation
-6. **Save settings** - Your configuration is stored securely on your device
-
-#### Environment Variables (Advanced)
-
-You can also use environment variables if preferred:
-
-**OpenAI GPT (Primary)**
+You can also use the helper script which prefers the system Python and warns about conda environments:
 ```bash
-export OPENAI_API_KEY="your-openai-api-key-here"
+./run_app.sh
 ```
 
-**Google Gemini (Alternative)**
+---
+
+## Configuring LLM Access
+
+INA calls the LLM APIs directly; you supply the API key.
+
+### Configure inside the app
+1. Launch the app.  
+2. Open **Settings → Models** (or follow the first-run prompt).  
+3. Choose **OpenAI GPT** or **Google Gemini**.  
+4. Paste your API key and pick a model.  
+5. Use **Test API Key** to verify connectivity.  
+6. Save. The encrypted config is stored locally in `~/.intention_app/api_config.json`.
+
+> ℹ️ For security and clarity, environment-variable based configuration is intentionally disabled. All credentials are entered and managed through the in-app settings screen.
+
+Supported models (as of v0.5):
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, or a custom model string.
+- **Google**: `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash`, etc.
+
+#### Estimated Token Costs
+Assuming an average of **26,500 input tokens** and **40 output tokens** per inference, running every **2 seconds** (≈1,800 inferences/hour):
+
+| Model | Price per hour (USD) |
+| --- | ---:|
+| GPT-4o mini | 7.20 |
+| GPT-5 | 60.00 |
+| GPT-5 mini | 12.00 |
+| GPT-4.1 | 96.00 |
+| Gemini 2.5 Pro | 60.00 |
+| Gemini 2.5 Flash | 14.50 |
+| Gemini 2.5 Flash-Lite *(recommended)* | 4.80 |
+| Gemini 2.0 Flash | 4.80 |
+| Gemini 2.0 Flash-Lite | 3.60 |
+
+---
+
+## Data & Logging
+
+| Location | Purpose |
+| --- | --- |
+| `~/INA_Data/session_data/<task_session>/` | Session-specific JSON logs (`_llm_results.json`, `_feedbacks.json`, `_reflections.json`). |
+| `~/INA_Data/logs/` | Console output captured via `main.py`’s tee logger. |
+| `~/.intention_app/api_config.json` | Stored API keys, model selections, windowing preferences. |
+
+Screenshots are never written to disk—they remain in memory long enough to be encoded for the LLM request.
+
+---
+
+## Building a macOS App Bundle
+
+Create a standalone `.app` using py2app:
 ```bash
-export GEMINI_API_KEY="your-gemini-api-key-here"
+python setup.py py2app
 ```
+The bundle appears in `dist/INA.app`. Because of the namespace shims mentioned earlier, the required Google and Rubicon modules are baked into the bundle.
 
-**For permanent setup, add to your shell profile:**
+To produce a signed DMG (for distribution within a lab or research group):
 ```bash
-# For bash users
-echo 'export OPENAI_API_KEY="your-key"' >> ~/.bashrc
-
-# For zsh users  
-echo 'export OPENAI_API_KEY="your-key"' >> ~/.zshrc
+./build_dmg.sh
 ```
+`create_dmg_background.py` regenerates the custom background graphic used by the DMG installer.
 
-#### Available Models
+> ⚠️ If you remove the `google/` or `rubicon/` directories, py2app will no longer discover those namespace packages and the built app will crash when it tries to import `google.genai` or `rubicon.objc`.
 
-**OpenAI GPT:**
-- GPT-4o (Latest, Recommended)
-- GPT-4o Mini (Faster, Cheaper)
-- GPT-4 Turbo (Previous)
+---
 
-**Google Gemini:**
-- Gemini 1.5 Pro (Recommended)
-- Gemini 1.5 Flash (Faster)
-- Gemini Pro Vision (Legacy)
+## Development Notes
+- The dashboard UI is written with PyQt6; macOS window behaviours (float-on-top, screen capture exclusion) are implemented through Rubicon-ObjC bridges.
+- Prompt templates live in `src/config/prompts.py`. Reflections triggered by user feedback are parsed and saved in the session folder for transparency.
+- Additional architecture notes and old design docs are in `architecture.md`.
 
-#### Get API Keys
-- **OpenAI**: https://platform.openai.com/api-keys
-- **Gemini**: https://ai.google.dev/gemini-api/docs/api-key
+---
 
-> **Note**: The app will use your selected provider, with automatic fallback to any configured provider if the primary one fails.
+## Contributing
+1. Fork the repository and create a feature branch.  
+2. Install dependencies via `requirements.txt` (see above).  
+3. Run `python main.py` locally to verify changes.  
+4. Keep new files ASCII when possible and document non-obvious logic with concise comments.  
+5. Submit a pull request describing the change and any testing performed.
 
-## App Modes
+Bug reports and feature suggestions are welcome. Please include macOS version, Python version, and whether you’re running from source or a packaged app.
 
-The application comes in three versions for experimental research purposes:
-
-- **FULL (Purple)**: **Main AIM Application** - Provides complete functionality with real-time feedback and notifications
-- **REMINDER (Blue)**: **Control Group** - Provides only periodic reminder notifications for comparison studies
-- **BASIC (Orange)**: **Baseline Group** - Performs basic monitoring with minimal UI feedback for comparison studies
-
-> **Note**: Purple is the primary AIM application, while Blue and Orange versions are designed for experimental comparison and research studies.
+---
 
 ## License
-
-This project was developed for research purposes.
+This project is released under the MIT License. See [`LICENSE`](LICENSE) for details.
