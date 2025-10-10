@@ -21,7 +21,7 @@ wheels/
 .installed.cfg
 *.egg
 venv/
-
+aim_env/
 # macOS
 .DS_Store
 .AppleDouble
