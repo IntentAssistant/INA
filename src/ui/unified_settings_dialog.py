@@ -310,11 +310,26 @@ class UnifiedSettingsDialog(QDialog):
         self.float_on_top_checkbox.stateChanged.connect(self.on_float_on_top_changed)
         window_layout.addWidget(self.float_on_top_checkbox)
 
+        self.exclude_capture_checkbox = QCheckBox("Hide dashboard from screen recordings (macOS)")
+        self.exclude_capture_checkbox.setChecked(
+            self.api_manager.get_exclude_dashboard_from_capture()
+        )
+        self.exclude_capture_checkbox.stateChanged.connect(
+            self.on_exclude_capture_changed
+        )
+        window_layout.addWidget(self.exclude_capture_checkbox)
+
         float_info = QLabel(
             "When enabled, the dashboard will always stay on top of other windows"
         )
         float_info.setStyleSheet("color: #888888;")
         window_layout.addWidget(float_info)
+
+        capture_info = QLabel(
+            "If checked, the dashboard and its popups are excluded from macOS screen capture."
+        )
+        capture_info.setStyleSheet("color: #888888;")
+        window_layout.addWidget(capture_info)
 
         window_group.setLayout(window_layout)
         layout.addWidget(window_group)
@@ -934,6 +949,22 @@ class UnifiedSettingsDialog(QDialog):
         # Try to update via parent (Dashboard)
         elif self.parent() and hasattr(self.parent(), "set_float_on_top"):
             self.parent().set_float_on_top(enabled)
+
+    def on_exclude_capture_changed(self, state):
+        """Handle dashboard capture exclusion toggle"""
+        enabled = state == Qt.CheckState.Checked.value
+        api_manager = get_api_config_manager()
+        api_manager.set_exclude_dashboard_from_capture(enabled)
+        print(
+            f"[SETTINGS] Dashboard screen capture exclusion "
+            f"{'enabled' if enabled else 'disabled'}"
+        )
+
+        # Apply immediately if possible
+        if self.app and hasattr(self.app, "dashboard"):
+            self.app.dashboard.set_exclude_from_capture(enabled)
+        elif self.parent() and hasattr(self.parent(), "set_exclude_from_capture"):
+            self.parent().set_exclude_from_capture(enabled)
 
     def on_notification_enabled_changed(self, state):
         """Handle notification enabled/disabled change"""

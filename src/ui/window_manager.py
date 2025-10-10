@@ -26,7 +26,7 @@ from PyQt6.QtCore import (
     QPoint,
 )
 from PyQt6.QtGui import QFont
-from AppKit import NSWindowSharingNone
+from AppKit import NSWindowSharingNone, NSWindowSharingReadOnly
 
 # Animation Constants
 ANIMATION_SHOW_DURATION = 300  # Show animation duration in ms
@@ -838,20 +838,26 @@ class WindowManager:
 
     def make_windows_secure(self, exclude_from_capture=True):
         """Make all windows secure for screen capture exclusion"""
-        if sys.platform == "darwin" and exclude_from_capture:
+        if sys.platform == "darwin":
             try:
+                sharing_type = (
+                    NSWindowSharingNone
+                    if exclude_from_capture
+                    else NSWindowSharingReadOnly
+                )
                 for window_name, window in self.windows.items():
                     if window:
                         native_view = objc.objc_object(c_void_p=int(window.winId()))
                         ns_window = native_view.window()
-                        ns_window.setSharingType_(NSWindowSharingNone)
-                print("[DASHBOARD] All windows protected from screen capture")
+                        ns_window.setSharingType_(sharing_type)
+                if exclude_from_capture:
+                    print("[DASHBOARD] All windows protected from screen capture")
+                else:
+                    print(
+                        "[DASHBOARD] Screen capture protection disabled for popup windows"
+                    )
             except Exception as e:
                 print(f"[ERROR] Failed to secure windows: {e}")
-        elif sys.platform == "darwin" and not exclude_from_capture:
-            print(
-                "[DASHBOARD] Screen capture protection disabled for popup windows (debug mode)"
-            )
         else:
             print(
                 "[DASHBOARD] Screen capture protection not available on this platform"

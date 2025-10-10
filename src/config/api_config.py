@@ -106,6 +106,9 @@ class APIConfigManager:
             if "save_images" not in debug_cfg:
                 debug_cfg["save_images"] = False
                 changed = True
+        if "exclude_dashboard_from_capture" not in self._config:
+            self._config["exclude_dashboard_from_capture"] = True
+            changed = True
         return changed
 
     def _save_config(self):
@@ -227,6 +230,15 @@ class APIConfigManager:
     def get_float_on_top(self) -> bool:
         """Get whether dashboard floats on top (default: True)"""
         return self._config.get("float_on_top", True)
+
+    def set_exclude_dashboard_from_capture(self, enabled: bool):
+        """Set whether the dashboard is excluded from screen capture"""
+        self._config["exclude_dashboard_from_capture"] = bool(enabled)
+        self._save_config()
+
+    def get_exclude_dashboard_from_capture(self) -> bool:
+        """Get whether the dashboard is excluded from screen capture (default: True)"""
+        return bool(self._config.get("exclude_dashboard_from_capture", True))
 
     def set_debug_save_images(self, enabled: bool):
         """Enable or disable saving debug screenshots"""

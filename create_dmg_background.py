@@ -21,7 +21,7 @@ except IOError:
     font = ImageFont.load_default()
 
 # Draw text
-text = "Drag Intention to Applications folder"
+text = "Drag INA to Applications folder"
 text_width = draw.textlength(text, font=font)
 text_position = ((width - text_width) // 2, 30)
 draw.text(text_position, text, fill=(255, 255, 255), font=font)

@@ -45,13 +45,14 @@ import requests
 import time
 import re
 from datetime import datetime
-from AppKit import NSWindow, NSWindowSharingNone
+from AppKit import NSWindow, NSWindowSharingNone, NSWindowSharingReadOnly
 from ctypes import c_void_p
 from ..config.constants import (
     WINDOW_MIN_WIDTH,
     WINDOW_MIN_HEIGHT,
     NOTIFICATION_ENABLED,
 )
+from ..config.api_config import get_api_config_manager
 
 
 # Import new modular components
@@ -84,9 +85,7 @@ BUTTON_WIDTH = 60  # Start button width (wider for text)
 START_BUTTON_HEIGHT = 24  # Same height as other buttons for perfect alignment
 
 # Screen Capture Settings
-EXCLUDE_FROM_SCREEN_CAPTURE = (
-    True  # Set to False to include dashboard in screenshots/recordings
-)
+DEFAULT_EXCLUDE_FROM_SCREEN_CAPTURE = True  # Fallback if config is unavailable
 
 # Animation Constants
 ANIMATION_SHOW_DURATION = 300  # Show animation duration in ms
@@ -104,6 +103,13 @@ class Dashboard(QWidget):
         super().__init__()
         self.thread_manager = thread_manager
         self.storage = storage
+        try:
+            api_manager = get_api_config_manager()
+            self.exclude_from_capture = (
+                api_manager.get_exclude_dashboard_from_capture()
+            )
+        except Exception:
+            self.exclude_from_capture = DEFAULT_EXCLUDE_FROM_SCREEN_CAPTURE
 
         # Store clarification data in memory
         self.current_clarification_data = []
@@ -228,7 +234,7 @@ class Dashboard(QWidget):
         )  # Small delay to ensure UI is ready
 
         # Make windows secure from screen capture
-        self.window_manager.make_windows_secure(EXCLUDE_FROM_SCREEN_CAPTURE)
+        self.window_manager.make_windows_secure(self.exclude_from_capture)
 
         # Make dashboard itself secure from screen capture
         self.makeWindowSecure()
@@ -1136,21 +1142,30 @@ class Dashboard(QWidget):
 
     def makeWindowSecure(self):
         """창을 보안 모드로 설정하여 화면 캡처에서 제외 (설정에 따라)"""
-        if sys.platform == "darwin" and EXCLUDE_FROM_SCREEN_CAPTURE:
+        if sys.platform == "darwin":
             try:
                 # Main window security
                 native_view = objc.objc_object(c_void_p=int(self.winId()))
                 ns_window = native_view.window()
-                ns_window.setSharingType_(NSWindowSharingNone)
-                print("[DASHBOARD] Screen capture protection enabled")
+                sharing_type = (
+                    NSWindowSharingNone
+                    if self.exclude_from_capture
+                    else NSWindowSharingReadOnly
+                )
+                ns_window.setSharingType_(sharing_type)
+                if self.exclude_from_capture:
+                    print("[DASHBOARD] Screen capture protection enabled")
+                else:
+                    print(
+                        "[DASHBOARD] Screen capture protection disabled for debugging"
+                    )
 
                 # All popup windows security is handled by WindowManager
-                self.window_manager.make_windows_secure(EXCLUDE_FROM_SCREEN_CAPTURE)
+                if hasattr(self, "window_manager") and self.window_manager:
+                    self.window_manager.make_windows_secure(self.exclude_from_capture)
 
             except Exception as e:
-                print(f"[ERROR] Failed to enable screen capture protection: {e}")
-        elif sys.platform == "darwin" and not EXCLUDE_FROM_SCREEN_CAPTURE:
-            print("[DASHBOARD] Screen capture protection disabled (debug mode)")
+                print(f"[ERROR] Failed to configure screen capture protection: {e}")
         else:
             print(
                 "[DASHBOARD] Screen capture protection not available on this platform"
@@ -2914,3 +2929,8 @@ class Dashboard(QWidget):
         # Update all popup windows (history, feedback, etc.)
         if hasattr(self, "window_manager") and self.window_manager:
             self.window_manager.set_all_windows_float_on_top(enabled)
+
+    def set_exclude_from_capture(self, enabled: bool):
+        """Enable or disable macOS screen capture exclusion for dashboard windows"""
+        self.exclude_from_capture = bool(enabled)
+        self.makeWindowSecure()
