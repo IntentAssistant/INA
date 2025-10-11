@@ -2,7 +2,7 @@
 
 **Intent Assistant (INA)** is an experimental platform for our ongoing research on aligned intention monitoring.  
 
-- ⬇️ **Download the latest macOS build:** [`INA-v0.5.0.dmg`](INA-v0.5.0.dmg)
+- ⬇️ **Download the latest macOS build:** [`INA-v1.0.0.dmg`](https://github.com/IntentAssistant/INA/releases/latest/download/INA-v1.0.0.dmg)
 
 The source code accompanies our forthcoming publication and project site:
 
