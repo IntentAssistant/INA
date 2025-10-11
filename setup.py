@@ -51,6 +51,7 @@ OPTIONS = {
         "certifi",
         "sentencepiece",
         "rubicon",
+        "rubicon_vendor.rubicon",
     ],
     # Force-include modules/packages that py2app has trouble finding
     "includes": [
@@ -62,6 +63,7 @@ OPTIONS = {
         "google.generativeai",
         "google.genai",
         "rubicon.objc",
+        "rubicon_vendor.rubicon",
         "objc",
     ],
     "site_packages": True,
