@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import io
 
 from PyQt6.QtWidgets import (
     QDialog,
@@ -25,13 +26,25 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
 )
 from PyQt6.QtCore import Qt, QSize, QRect, QTimer, QUrl
-from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDesktopServices, QPixmap
+from PyQt6.QtGui import (
+    QFont,
+    QPainter,
+    QColor,
+    QPen,
+    QDesktopServices,
+    QPixmap,
+    QImage,
+)
+
+from PIL import Image
 
 from ..config.api_config import (
     LLMProvider,
     get_api_config_manager,
     API_CONFIG,
 )
+from ..config.constants import IMAGE_QUALITY
+from ..utils.activity import get_frontmost_app
 
 
 class DisplayHighlightWindow(QWidget):
@@ -479,7 +492,7 @@ class UnifiedSettingsDialog(QDialog):
         model_group = QGroupBox("Model")
         model_layout = QVBoxLayout()
 
-        model_label = QLabel("Select model:")
+        model_label = QLabel("Select model: (Gemini 2.5 Flash Lite is recommended)")
         model_layout.addWidget(model_label)
 
         self.model_combo = QComboBox()
@@ -1007,25 +1020,50 @@ class UnifiedSettingsDialog(QDialog):
 
     def on_test_screen_capture(self):
         """Capture a one-off screenshot and show it to the user"""
-        if not self.app or not hasattr(self.app, "manager"):
-            QMessageBox.warning(
-                self,
-                "Not Available",
-                "Screen capture preview is only available when the app is running.",
-            )
-            return
+        manager = None
+        if self.app and hasattr(self.app, "manager"):
+            manager = self.app.manager
+        elif self.parent() and hasattr(self.parent(), "thread_manager"):
+            manager = self.parent().thread_manager
 
-        result = self.app.manager.capture_screen_preview()
-        if not result or not result.get("image_data"):
-            QMessageBox.warning(
-                self,
-                "Capture Failed",
-                "Could not capture the screen. Make sure screen recording permission is granted to INA.",
-            )
-            return
+        image_data = None
+        metadata = {}
+        if manager:
+            result = manager.capture_screen_preview()
+            if result and result.get("image_data"):
+                image_data = result.get("image_data")
+                metadata = result.get("metadata", {})
 
-        image_data = result.get("image_data")
-        metadata = result.get("metadata", {})
+        if image_data is None:
+            screen = QApplication.primaryScreen()
+            if not screen:
+                QMessageBox.warning(
+                    self,
+                    "Capture Failed",
+                    "Could not find an active screen to capture.",
+                )
+                return
+
+            screenshot = screen.grabWindow(0)
+            image = screenshot.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+            ptr = image.bits()
+            ptr.setsize(image.width() * image.height() * 4)
+            raw_bytes = bytes(ptr)
+
+            pil_rgba = Image.frombuffer(
+                "RGBA",
+                (image.width(), image.height()),
+                raw_bytes,
+                "raw",
+                "BGRA",
+                0,
+                1,
+            )
+            pil_image = pil_rgba.convert("RGB")
+            buffer = io.BytesIO()
+            pil_image.save(buffer, format="JPEG", quality=IMAGE_QUALITY)
+            image_data = buffer.getvalue()
+            metadata = {"frontmost_app": get_frontmost_app() or "Unknown"}
 
         pixmap = QPixmap()
         if not pixmap.loadFromData(image_data, "JPEG"):
@@ -1052,7 +1090,7 @@ class UnifiedSettingsDialog(QDialog):
         layout.addWidget(image_label)
 
         info_lines = []
-        frontmost = metadata.get("frontmost_app") or "Unknown"
+        frontmost = metadata.get("frontmost_app") or get_frontmost_app() or "Unknown"
         info_lines.append(f"Frontmost app: {frontmost}")
         info_lines.append(
             "If you only see your desktop wallpaper, enable screen recording for INA in System Settings → Privacy & Security → Screen Recording."

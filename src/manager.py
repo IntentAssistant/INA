@@ -412,7 +412,7 @@ class ThreadManager(QObject):
                     return None
 
             # Convert screenshot to a QImage with a known byte order
-            image = screenshot.toImage().convertToFormat(QImage.Format_RGBA8888)
+            image = screenshot.toImage().convertToFormat(QImage.Format.Format_ARGB32)
             ptr = image.bits()
             ptr.setsize(image.width() * image.height() * 4)
             raw_bytes = bytes(ptr)
@@ -424,7 +424,7 @@ class ThreadManager(QObject):
                 (image.width(), image.height()),
                 raw_bytes,
                 "raw",
-                "RGBA",
+                "BGRA",
                 0,
                 1,
             )

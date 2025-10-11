@@ -1,5 +1,5 @@
 # App Version - Change this when releasing a new version
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.1.0"
 
 # API Settings - Direct LLM Integration
 # Configure API keys via the UI (Settings > User Settings > Configure API Settings)
