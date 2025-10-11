@@ -9,6 +9,8 @@ from enum import Enum
 from typing import Optional, Dict, Any, List
 from google import genai
 
+from .constants import CAPTURE_INTERVAL, LLM_INVOKE_INTERVAL
+
 
 class LLMProvider(Enum):
     OPENAI = "openai"
@@ -108,6 +110,9 @@ class APIConfigManager:
                 changed = True
         if "exclude_dashboard_from_capture" not in self._config:
             self._config["exclude_dashboard_from_capture"] = True
+            changed = True
+        if "capture_interval_seconds" not in self._config:
+            self._config["capture_interval_seconds"] = CAPTURE_INTERVAL
             changed = True
         return changed
 
@@ -239,6 +244,19 @@ class APIConfigManager:
     def get_exclude_dashboard_from_capture(self) -> bool:
         """Get whether the dashboard is excluded from screen capture (default: True)"""
         return bool(self._config.get("exclude_dashboard_from_capture", True))
+
+    def set_capture_interval(self, seconds: int):
+        seconds = max(1, int(seconds))
+        self._config["capture_interval_seconds"] = seconds
+        # LLM interval mirrors capture interval
+        self._config["llm_interval_seconds"] = seconds
+        self._save_config()
+
+    def get_capture_interval(self) -> int:
+        return int(self._config.get("capture_interval_seconds", CAPTURE_INTERVAL))
+
+    def get_llm_interval(self) -> int:
+        return int(self._config.get("llm_interval_seconds", LLM_INVOKE_INTERVAL))
 
     def set_debug_save_images(self, enabled: bool):
         """Enable or disable saving debug screenshots"""

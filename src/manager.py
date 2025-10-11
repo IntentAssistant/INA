@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from PIL import Image
 
 
-from PyQt6.QtGui import QPainter, QPen, QColor
+from PyQt6.QtGui import QPainter, QPen, QColor, QImage
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QObject, QBuffer, QIODevice
 from PyQt6.QtWidgets import QWidget, QApplication
 
@@ -210,12 +210,16 @@ class ThreadManager(QObject):
             session_id = getattr(self.dashboard, "current_session_start_time", None)
             self.update_task(self.dashboard.current_task, session_id)
 
+        api_manager = get_api_config_manager()
+        capture_interval = api_manager.get_capture_interval()
+        llm_interval = api_manager.get_llm_interval()
+
         # Start capture process
-        self.capture_timer.start(CAPTURE_INTERVAL * 1000)
+        self.capture_timer.start(capture_interval * 1000)
 
         # Start LLM timer for all modes (BASIC and REMINDER handle UI differently in app.py)
-        self.llm_timer.start(LLM_INVOKE_INTERVAL * 1000)
-        print(f"LLM timer started with interval {LLM_INVOKE_INTERVAL} seconds")
+        self.llm_timer.start(llm_interval * 1000)
+        print(f"LLM timer started with interval {llm_interval} seconds")
 
         # Start screen lock detection timer
         if self.screen_lock_check_enabled and self.screen_lock_detector.is_supported:
@@ -356,16 +360,24 @@ class ThreadManager(QObject):
             return False
 
     def capture_screen(self):
-        """Capture the selected display (no longer saves to disk, keeps in memory)"""
-        if not self.is_running:
-            return
+        """Capture the selected display on the regular loop"""
+        self._capture_screen_internal(force=False, cache=True)
+
+    def capture_screen_preview(self):
+        """Capture a single screenshot for preview purposes"""
+        return self._capture_screen_internal(force=True, cache=False)
+
+    def _capture_screen_internal(self, force=False, cache=True):
+        """Internal helper that performs screenshot capture"""
+        if not self.is_running and not force:
+            return None
 
         # Check screen lock status before capturing
-        if self.screen_lock_detector.is_supported:
+        if self.screen_lock_detector.is_supported and not force:
             is_locked = self.screen_lock_detector.is_screen_locked()
             if is_locked:
                 print("[CAPTURE] Screen is locked - skipping capture")
-                return
+                return None
 
         # Only log once per session or when display changes
         if not hasattr(self, "_logged_display_info"):
@@ -397,24 +409,26 @@ class ThreadManager(QObject):
                     screenshot = screen.grabWindow(0)
                 else:
                     print(f"Selected display {self.selected_display} not found")
-                    return
+                    return None
 
-            # Convert screenshot to bytes for direct API processing
-            # PyQt6 requires QBuffer instead of BytesIO
-            byte_array = (
-                screenshot.toImage().bits().asstring(screenshot.toImage().sizeInBytes())
-            )
+            # Convert screenshot to a QImage with a known byte order
+            image = screenshot.toImage().convertToFormat(QImage.Format_RGBA8888)
+            ptr = image.bits()
+            ptr.setsize(image.width() * image.height() * 4)
+            raw_bytes = bytes(ptr)
 
-            # Use PIL to convert and compress
             from PIL import Image
 
-            pil_image = Image.frombytes(
-                "RGBA", (screenshot.width(), screenshot.height()), byte_array
+            pil_rgba = Image.frombuffer(
+                "RGBA",
+                (image.width(), image.height()),
+                raw_bytes,
+                "raw",
+                "RGBA",
+                0,
+                1,
             )
-
-            # Convert to RGB (remove alpha channel)
-            if pil_image.mode == "RGBA":
-                pil_image = pil_image.convert("RGB")
+            pil_image = pil_rgba.convert("RGB")
 
             # Save to BytesIO using PIL
             buffer = io.BytesIO()
@@ -444,25 +458,32 @@ class ThreadManager(QObject):
             self.last_response_image_id = image_id  # Store for feedback reference
 
             # Add to image cache for feedback (keep last 10 images)
-            self.image_cache.append(
-                {
-                    "image_id": image_id,
-                    "image_data": self.current_screenshot_data,
-                    "pil_image": pil_image.copy(),  # Keep PIL image for easier processing
-                    "metadata": self.current_capture_metadata.copy(),
-                    "task": self.dashboard.current_task if self.dashboard else None,
-                }
-            )
-            print(
-                f"[CACHE] Image added to cache with ID: {image_id} (total: {len(self.image_cache)}/10)"
-            )
+            if cache:
+                self.image_cache.append(
+                    {
+                        "image_id": image_id,
+                        "image_data": self.current_screenshot_data,
+                        "pil_image": pil_image.copy(),  # Keep PIL image for easier processing
+                        "metadata": self.current_capture_metadata.copy(),
+                        "task": self.dashboard.current_task if self.dashboard else None,
+                    }
+                )
+                print(
+                    f"[CACHE] Image added to cache with ID: {image_id} (total: {len(self.image_cache)}/10)"
+                )
 
             print(
                 f"[CAPTURE] Screenshot captured in memory ({len(self.current_screenshot_data)} bytes)"
             )
 
+            return {
+                "image_data": self.current_screenshot_data,
+                "metadata": self.current_capture_metadata,
+            }
+
         except Exception as e:
             print(f"[CAPTURE] Error: {e}")
+            return None
 
     def do_llm_analysis(self):
         """Perform LLM analysis on current screenshot (no file system access)"""

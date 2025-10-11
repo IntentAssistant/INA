@@ -822,10 +822,16 @@ class IntentionalComputingApp(rumps.App):
 
         print("\n=== Starting Auto Capture ===")
 
+        api_manager = get_api_config_manager()
+        capture_interval = api_manager.get_capture_interval()
+        llm_interval = api_manager.get_llm_interval()
+
         # Start timers
-        self.capture_timer.start(CAPTURE_INTERVAL * 1000)
-        self.llm_timer.start(LLM_INVOKE_INTERVAL * 1000)
-        print("Capture and LLM timers started")
+        self.capture_timer.start(capture_interval * 1000)
+        self.llm_timer.start(llm_interval * 1000)
+        print(
+            f"Capture timer started ({capture_interval}s), LLM timer started ({llm_interval}s)"
+        )
 
         # Show recording indicator
         self.update_recording_indicator()

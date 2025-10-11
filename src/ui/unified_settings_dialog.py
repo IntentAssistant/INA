@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
 )
 from PyQt6.QtCore import Qt, QSize, QRect, QTimer, QUrl
-from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDesktopServices
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDesktopServices, QPixmap
 
 from ..config.api_config import (
     LLMProvider,
@@ -310,7 +310,16 @@ class UnifiedSettingsDialog(QDialog):
         self.float_on_top_checkbox.stateChanged.connect(self.on_float_on_top_changed)
         window_layout.addWidget(self.float_on_top_checkbox)
 
-        self.exclude_capture_checkbox = QCheckBox("Hide dashboard from screen recordings (macOS)")
+        float_info = QLabel(
+            "Keeps the dashboard above other windows so it is always visible."
+        )
+        float_info.setStyleSheet("color: #888888;")
+        window_layout.addWidget(float_info)
+
+        self.exclude_capture_checkbox = QCheckBox(
+            "Hide dashboard from screen recordings (macOS)"
+        )
+
         self.exclude_capture_checkbox.setChecked(
             self.api_manager.get_exclude_dashboard_from_capture()
         )
@@ -319,20 +328,59 @@ class UnifiedSettingsDialog(QDialog):
         )
         window_layout.addWidget(self.exclude_capture_checkbox)
 
-        float_info = QLabel(
-            "When enabled, the dashboard will always stay on top of other windows"
+        exclude_capture_info = QLabel(
+            "Prevent the dashboard from being captured in screen recordings.\n Note: This is recommended for optimal performance. Please uncheck this option only if you wish to capture the dashboard."
         )
-        float_info.setStyleSheet("color: #888888;")
-        window_layout.addWidget(float_info)
-
-        capture_info = QLabel(
-            "If checked, the dashboard and its popups are excluded from macOS screen capture."
-        )
-        capture_info.setStyleSheet("color: #888888;")
-        window_layout.addWidget(capture_info)
+        exclude_capture_info.setStyleSheet("color: #888888;")
+        window_layout.addWidget(exclude_capture_info)
 
         window_group.setLayout(window_layout)
         layout.addWidget(window_group)
+
+        # Capture settings group
+        capture_group = QGroupBox("Capture & Analysis")
+        capture_layout = QVBoxLayout()
+
+        capture_info = QLabel(
+            "Adjust how often INA captures screenshots and runs analysis."
+        )
+        capture_info.setStyleSheet("color: #888888;")
+        capture_layout.addWidget(capture_info)
+
+        interval_row = QHBoxLayout()
+        capture_label = QLabel("Capture & inference interval (seconds):")
+        interval_row.addWidget(capture_label)
+
+        self.capture_interval_spin = QSpinBox()
+        self.capture_interval_spin.setRange(1, 60)
+        self.capture_interval_spin.setValue(self.api_manager.get_capture_interval())
+        self.capture_interval_spin.valueChanged.connect(
+            self.on_capture_interval_changed
+        )
+        interval_row.addWidget(self.capture_interval_spin)
+
+        interval_row.addStretch()
+        capture_layout.addLayout(interval_row)
+
+        capture_tip = QLabel(
+            "If the preview shows only your wallpaper, allow screen recording for INA in macOS Settings."
+        )
+        capture_tip.setStyleSheet("color: #888888;")
+        capture_layout.addWidget(capture_tip)
+
+        button_row = QHBoxLayout()
+        test_capture_btn = QPushButton("Test Screen Capture")
+        test_capture_btn.clicked.connect(self.on_test_screen_capture)
+        button_row.addWidget(test_capture_btn)
+
+        open_settings_btn = QPushButton("Open Screen Recording Settings")
+        open_settings_btn.clicked.connect(self.on_open_screen_capture_settings)
+        button_row.addWidget(open_settings_btn)
+        button_row.addStretch()
+
+        capture_layout.addLayout(button_row)
+        capture_group.setLayout(capture_layout)
+        layout.addWidget(capture_group)
 
         layout.addStretch()
         return page
@@ -956,6 +1004,120 @@ class UnifiedSettingsDialog(QDialog):
             self.app.dashboard.set_exclude_from_capture(enabled)
         elif self.parent() and hasattr(self.parent(), "set_exclude_from_capture"):
             self.parent().set_exclude_from_capture(enabled)
+
+    def on_test_screen_capture(self):
+        """Capture a one-off screenshot and show it to the user"""
+        if not self.app or not hasattr(self.app, "manager"):
+            QMessageBox.warning(
+                self,
+                "Not Available",
+                "Screen capture preview is only available when the app is running.",
+            )
+            return
+
+        result = self.app.manager.capture_screen_preview()
+        if not result or not result.get("image_data"):
+            QMessageBox.warning(
+                self,
+                "Capture Failed",
+                "Could not capture the screen. Make sure screen recording permission is granted to INA.",
+            )
+            return
+
+        image_data = result.get("image_data")
+        metadata = result.get("metadata", {})
+
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(image_data, "JPEG"):
+            QMessageBox.warning(
+                self,
+                "Preview Error",
+                "Failed to load the captured image.",
+            )
+            return
+
+        preview_dialog = QDialog(self)
+        preview_dialog.setWindowTitle("Screen Capture Preview")
+        layout = QVBoxLayout(preview_dialog)
+
+        image_label = QLabel()
+        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scaled = pixmap.scaled(
+            1024,
+            640,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        image_label.setPixmap(scaled)
+        layout.addWidget(image_label)
+
+        info_lines = []
+        frontmost = metadata.get("frontmost_app") or "Unknown"
+        info_lines.append(f"Frontmost app: {frontmost}")
+        info_lines.append(
+            "If you only see your desktop wallpaper, enable screen recording for INA in System Settings → Privacy & Security → Screen Recording."
+        )
+
+        info_label = QLabel("\n".join(info_lines))
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #888888;")
+        layout.addWidget(info_label)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(preview_dialog.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        preview_dialog.resize(scaled.width() + 80, scaled.height() + 160)
+        preview_dialog.exec()
+
+    def on_open_screen_capture_settings(self):
+        """Open macOS screen recording privacy settings"""
+        if sys.platform != "darwin":
+            QMessageBox.information(
+                self,
+                "Not Supported",
+                "Screen recording settings are only available on macOS.",
+            )
+            return
+
+        try:
+            subprocess.run(
+                [
+                    "open",
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+                ],
+                check=False,
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Unable to Open Settings",
+                f"Failed to open macOS Screen Recording settings.\n\n{str(e)}",
+            )
+
+    def on_capture_interval_changed(self, value):
+        value = int(value)
+        api_manager = get_api_config_manager()
+        api_manager.set_capture_interval(value)
+        self._apply_interval_update(value)
+
+    def _apply_interval_update(self, interval_seconds: int):
+        manager = None
+        if self.app and hasattr(self.app, "manager"):
+            manager = self.app.manager
+        else:
+            parent = self.parent()
+            if parent and hasattr(parent, "thread_manager"):
+                manager = parent.thread_manager
+
+        if manager:
+            manager.update_intervals(interval_seconds, interval_seconds)
+
+        if self.app:
+            if hasattr(self.app, "capture_timer"):
+                self.app.capture_timer.setInterval(interval_seconds * 1000)
+            if hasattr(self.app, "llm_timer"):
+                self.app.llm_timer.setInterval(interval_seconds * 1000)
 
     def on_notification_enabled_changed(self, state):
         """Handle notification enabled/disabled change"""
