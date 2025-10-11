@@ -20,7 +20,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-venv/
+.venv/
 aim_env/
 # macOS
 .DS_Store
