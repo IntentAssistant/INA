@@ -6,7 +6,7 @@ APP_NAME = "INA"
 APP_SCRIPT = "main.py"
 BUNDLE_ID = "com.ina.app"
 ICON_PATH = "src/assets/INA.png"
-APP_VERSION = "0.1.0"
+APP_VERSION = "1.0.0"
 
 # --- Collect all asset files ---
 assets_dir = "src/assets"

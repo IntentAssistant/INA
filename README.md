@@ -164,3 +164,4 @@ Bug reports and feature suggestions are welcome. Please include macOS version, P
 
 ## License
 This project is released under the MIT License. See [`LICENSE`](LICENSE) for details.
+w
