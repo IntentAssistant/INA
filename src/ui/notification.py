@@ -216,7 +216,7 @@ class NotificationManager:
                     print(f"   Callback exists: {on_good is not None}")
                     print("=" * 50)
 
-                    # 🔥 CRITICAL: 버튼 클릭 시점의 dashboard 상태 저장 (메시지 피드백에서 사용할 용도)
+                    # 🔥 CRITICAL: Capture dashboard state at button click time for feedback handling
                     current_context = None
                     if dashboard:
                         current_context = {
@@ -239,7 +239,7 @@ class NotificationManager:
                             f"[NOTIFICATION] vs Original context - Image ID: {notification_context.get('image_id', 'None') if notification_context else 'None'}"
                         )
 
-                    # 기존 콜백 실행
+                    # Execute original callback
                     if on_good:
                         try:
                             print(f"🔄 Executing Good callback...")
@@ -263,7 +263,7 @@ class NotificationManager:
                     print(f"   Callback exists: {on_bad is not None}")
                     print("=" * 50)
 
-                    # 🔥 CRITICAL: 버튼 클릭 시점의 dashboard 상태 저장 (메시지 피드백에서 사용할 용도)
+                    # 🔥 CRITICAL: Capture dashboard state at button click time for feedback handling
                     current_context = None
                     if dashboard:
                         current_context = {
@@ -286,7 +286,7 @@ class NotificationManager:
                             f"[NOTIFICATION] vs Original context - Image ID: {notification_context.get('image_id', 'None') if notification_context else 'None'}"
                         )
 
-                    # 기존 콜백 실행
+                    # Execute original callback
                     if on_bad:
                         try:
                             print(f"🔄 Executing Bad callback...")

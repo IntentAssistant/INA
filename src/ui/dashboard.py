@@ -1133,7 +1133,7 @@ class Dashboard(QWidget):
                 if windows:
                     windows[-1].setLevel_(NSFloatingWindowLevel)  # Set floating level
 
-                # 창이 실제로 보여진 후 보안 설정 적용
+                # Apply security settings after the window is actually visible
                 self.makeWindowSecure()
             except ImportError:
                 self.show()

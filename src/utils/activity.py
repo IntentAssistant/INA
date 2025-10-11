@@ -50,12 +50,12 @@ def get_browser_url(app_name):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=2,  # 2초 타임아웃
+            timeout=2,  # 2-second timeout
         )
 
         if result.returncode == 0 and result.stdout.strip():
             url = result.stdout.strip()
-            # 너무 긴 URL은 일부만 표시
+            # Truncate very long URLs
             if len(url) > 100:
                 return url[:97] + "..."
             return url

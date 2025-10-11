@@ -11,7 +11,7 @@ class LocalStorage:
         self.setup_storage_directory()
         self.user_name = "unknown"
         self.task_name = "N/A (no_task)"
-        self.task_start_time = None  # 시간 추가
+        self.task_start_time = None  # Track task start time
         self._session_dir_override = None
         # Ensure all required files exist after directory setup
         self.ensure_required_files()

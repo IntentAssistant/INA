@@ -315,7 +315,7 @@ class ReflectionThread(QThread):
 
                     # Store the raw response for parsing in _handle_reflection_complete
                     result = {
-                        "reflection_response": reflection_text,  # ← 이게 핵심!
+                        "reflection_response": reflection_text,  # Store the raw reflection response
                         "reflection": {
                             "raw_text": reflection_text,
                         },

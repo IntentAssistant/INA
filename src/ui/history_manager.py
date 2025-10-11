@@ -22,10 +22,10 @@ class TimelineWidget(QWidget):
         super().__init__(parent)
         self.items = []
         self.intention_records = []  # Store original intention records for each item
-        self.max_visible_items = 5  # 최대 표시 아이템 수를 5로 설정
-        self.scroll_offset = 0  # 스크롤 오프셋 추가
-        self._real_scroll_offset = 0.0  # 실수 스크롤 위치 저장 변수
-        self.setFixedHeight(200)  # 고정 높이 설정 (태스크 개수와 상관없이)
+        self.max_visible_items = 5  # Show up to five items by default
+        self.scroll_offset = 0  # Track scroll offset
+        self._real_scroll_offset = 0.0  # Floating-point scroll position for smooth scrolling
+        self.setFixedHeight(200)  # Keep widget height constant regardless of item count
         self.hovered_item = -1  # Track hovered item for visual feedback
 
         # Enable mouse wheel events for scrolling
@@ -47,8 +47,8 @@ class TimelineWidget(QWidget):
         self.items.insert(0, text)  # Add to beginning (most recent first)
         self.intention_records.insert(0, record)  # Store corresponding record
 
-        # 전체 히스토리는 더 많이 저장하되, 표시는 max_visible_items만
-        if len(self.items) > 100:  # 전체 히스토리는 100개까지 저장 (20개에서 늘림)
+        # Keep the full history but display only up to max_visible_items
+        if len(self.items) > 100:  # Limit total history to 100 entries
             self.items = self.items[:100]
             self.intention_records = self.intention_records[:100]
 
@@ -82,29 +82,29 @@ class TimelineWidget(QWidget):
         # Calculate scroll direction and step
         delta = event.angleDelta().y()
 
-        # 스크롤 스텝을 작게 설정해 스크롤 속도 감소
-        scroll_step = 0.3 if abs(delta) < 120 else 0.5  # 이전: 1 또는 2
+        # Use a smaller step to slow the scroll speed
+        scroll_step = 0.3 if abs(delta) < 120 else 0.5  # Previously 1 or 2
 
-        # 소수점 스텝을 위한 실수 스크롤 위치 저장 변수 (클래스 초기화 시 self._real_scroll_offset = 0.0 추가 필요)
+        # Floating scroll offset to support fractional steps
         if not hasattr(self, "_real_scroll_offset"):
             self._real_scroll_offset = float(self.scroll_offset)
 
-        # 부드러운 스크롤 적용
-        if delta > 0:  # 위로 스크롤
+        # Apply smooth scrolling
+        if delta > 0:  # Scroll up
             self._real_scroll_offset = max(0, self._real_scroll_offset - scroll_step)
-        else:  # 아래로 스크롤
+        else:  # Scroll down
             max_offset = max(0, len(self.items) - self.max_visible_items)
             self._real_scroll_offset = min(
                 max_offset, self._real_scroll_offset + scroll_step
             )
 
-        # 실수값에서 정수로 변환 (실제 표시될 항목 인덱스는 정수여야 함)
+        # Convert floating offset to integer index
         new_offset = int(self._real_scroll_offset)
 
-        # 값이 변경된 경우만 업데이트
+        # Update only when the offset changes
         if new_offset != self.scroll_offset:
             self.scroll_offset = new_offset
-            self.update()  # 변경 시에만 업데이트
+            self.update()  # Repaint only when changed
 
         event.accept()
 
@@ -117,16 +117,16 @@ class TimelineWidget(QWidget):
             return
 
         # Timeline styling
-        circle_radius = 6  # 원 크기를 조금 줄임
+        circle_radius = 6  # Slightly smaller circle radius
         line_color = QColor("#007AFF")  # Blue color
         circle_color = QColor("#007AFF")
         text_color = QColor("#FFFFFF")
 
-        # Calculate positions - 간격 조정
-        margin_left = 16  # 왼쪽 여백 줄임
-        margin_top = 10  # 위쪽 여백을 15에서 5로 크게 줄임
-        item_height = 32  # 아이템 간 간격을 늘려서 긴 텍스트 수용
-        margin_bottom = 15  # 아래쪽 여백
+        # Calculate positions and adjust spacing
+        margin_left = 16  # Reduce left margin
+        margin_top = 10  # Reduce top margin
+        item_height = 32  # Increase vertical spacing to fit long text
+        margin_bottom = 15  # Bottom margin
 
         # Get visible items based on scroll offset
         start_index = self.scroll_offset

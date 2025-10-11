@@ -32,7 +32,7 @@ class IndicatorWidget(QWidget):
         self.setFixedSize(geometry.width(), geometry.height())
         self.setGeometry(geometry)
 
-        # macOS 설정
+        # macOS-specific window configuration
         if sys.platform == "darwin":
             try:
                 from AppKit import (
