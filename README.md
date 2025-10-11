@@ -170,51 +170,30 @@ Bug reports and feature suggestions are welcome. Please include macOS version, P
 <details open>
 <summary>🧱 Architecture Overview</summary>
 
-- High-level component map:
+- High-level flow:
 
 ```mermaid
 flowchart LR
-    subgraph Entry
-        Main["main.py<br/>Entry + logging setup"]
-        App["IntentionalComputingApp<br/>src/app.py"]
-    end
+    User["User task & feedback"]
+    Dashboard["Dashboard (PyQt)"]
+    Manager["ThreadManager"]
+    Capture["Screen capture<br/>& context"]
+    LLM["LLM API"]
+    Storage["Local storage"]
+    Notify["Notifications"]
 
-    subgraph Core
-        TM["ThreadManager<br/>src/manager.py"]
-        Dash["Dashboard (PyQt UI)<br/>src/ui/dashboard.py"]
-        Notify["NotificationManager<br/>src/ui/notification.py"]
-        Storage["LocalStorage<br/>src/logging/storage.py"]
-        Prompt["PromptConfig<br/>src/config/prompt_config.py"]
-        APIConfig["APIConfigManager<br/>src/config/api_config.py"]
-    end
-
-    subgraph LLM
-        LLMThread["LLMAnalysisThread<br/>src/utils/llm_analysis.py"]
-        DirectClient["DirectLLMClient<br/>src/utils/direct_llm_client.py"]
-        LLMAPI[(LLM API Providers)]
-    end
-
-    Main --> App
-    App --> TM
-    App --> Dash
-    App --> Storage
-    App --> Notify
-    App --> Prompt
-    App --> APIConfig
-    Dash --> TM
-    Dash --> Notify
-    Dash --> Storage
-    TM --> LLMThread
-    TM --> Storage
-    TM --> Notify
-    LLMThread --> DirectClient
-    DirectClient --> LLMAPI
-    Prompt --> TM
-    APIConfig --> TM
-    APIConfig --> DirectClient
+    User --> Dashboard
+    Dashboard --> Manager
+    Manager --> Capture
+    Capture --> Manager
+    Manager --> LLM
+    LLM --> Manager
+    Manager --> Dashboard
+    Manager --> Storage
+    Manager --> Notify
 ```
 
-- See [`architecture.md`](architecture.md) for full diagrams (capture flow, reflection loop) and context.
+- See [`architecture.md`](architecture.md) for detailed capture and reflection flows.
 
 </details>
 

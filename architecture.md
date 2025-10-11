@@ -10,48 +10,27 @@
 - **APIConfigManager** (`src/config/api_config.py`) persists user settings (provider, keys, capture intervals, display selection, notification flags) under `~/.intention_app`.
 - **PromptConfig** (`src/config/prompt_config.py`) composes prompts (base, clarification, reflection) using persisted data.
 
-## Module Graph
+## High-Level Flow
 
 ```mermaid
-graph LR
-    subgraph Entry
-        Main["main.py<br/>Entry + logging setup"]
-        App["IntentionalComputingApp<br/>src/app.py"]
-    end
+flowchart LR
+    User["User task & feedback"]
+    Dashboard["Dashboard (PyQt)"]
+    Manager["ThreadManager"]
+    Capture["Screen capture<br/>& context"]
+    LLM["LLM API"]
+    Storage["Local storage"]
+    Notify["Notifications"]
 
-    subgraph Core
-        TM["ThreadManager<br/>src/manager.py"]
-        Dash["Dashboard (PyQt UI)<br/>src/ui/dashboard.py"]
-        Notify["NotificationManager<br/>src/ui/notification.py"]
-        Storage["LocalStorage<br/>src/logging/storage.py"]
-        Prompt["PromptConfig<br/>src/config/prompt_config.py"]
-        APIConfig["APIConfigManager<br/>src/config/api_config.py"]
-    end
-
-    subgraph LLM
-        LLMThread["LLMAnalysisThread<br/>src/utils/llm_analysis.py"]
-        DirectClient["DirectLLMClient<br/>src/utils/direct_llm_client.py"]
-        LLMAPI[(LLM API Providers)]
-    end
-
-    Main --> App
-    App --> TM
-    App --> Dash
-    App --> Storage
-    App --> Notify
-    App --> Prompt
-    App --> APIConfig
-    Dash --> TM
-    Dash --> Notify
-    Dash --> Storage
-    TM --> LLMThread
-    TM --> Storage
-    TM --> Notify
-    LLMThread --> DirectClient
-    DirectClient --> LLMAPI
-    Prompt --> TM
-    APIConfig --> TM
-    APIConfig --> DirectClient
+    User --> Dashboard
+    Dashboard --> Manager
+    Manager --> Capture
+    Capture --> Manager
+    Manager --> LLM
+    LLM --> Manager
+    Manager --> Dashboard
+    Manager --> Storage
+    Manager --> Notify
 ```
 
 ## Capture → Insight Flow
