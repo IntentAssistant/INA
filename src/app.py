@@ -874,7 +874,6 @@ class IntentionalComputingApp(rumps.App):
             if self.dashboard and hasattr(self.dashboard, "feedback_manager"):
                 feedback_manager = self.dashboard.feedback_manager
 
-                # 🔥 CRITICAL: 버튼 클릭 시점의 dashboard 상태 사용 (메시지 피드백과 일치시키기 위해)
                 button_click_image_id = getattr(
                     self.dashboard, "displayed_message_image_id", None
                 ) or getattr(self.dashboard, "last_llm_response_image_id", None)

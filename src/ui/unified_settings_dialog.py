@@ -342,7 +342,7 @@ class UnifiedSettingsDialog(QDialog):
         window_layout.addWidget(self.exclude_capture_checkbox)
 
         exclude_capture_info = QLabel(
-            "Prevent the dashboard from being captured in screen recordings.\n Note: This is recommended for optimal performance. Please uncheck this option only if you wish to capture the dashboard."
+            "Prevent the widget from being captured in screen recordings.\n Note: This is recommended for optimal performance. Please uncheck this option only if you wish to capture the widget."
         )
         exclude_capture_info.setStyleSheet("color: #888888;")
         window_layout.addWidget(exclude_capture_info)
@@ -592,7 +592,7 @@ class UnifiedSettingsDialog(QDialog):
         display_group = QGroupBox("Display Settings")
         display_layout = QVBoxLayout()
 
-        opacity_label = QLabel("Dashboard Opacity:")
+        opacity_label = QLabel("Widget Opacity:")
         display_layout.addWidget(opacity_label)
 
         opacity_info = QLabel("Adjust opacity from the dashboard slider (🔍)")
