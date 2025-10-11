@@ -50,7 +50,6 @@ OPTIONS = {
         "charset_normalizer",
         "certifi",
         "sentencepiece",
-        "google",
     ],
     # Force-include modules/packages that py2app has trouble finding
     "includes": [
@@ -61,8 +60,6 @@ OPTIONS = {
         "google.ai.generativelanguage",
         "google.generativeai",
         "google.genai",
-        "rubicon",
-        "rubicon.objc",
         "objc",
     ],
     "site_packages": True,

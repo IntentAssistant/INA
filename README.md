@@ -124,7 +124,7 @@ Create a standalone `.app` using py2app:
 ```bash
 python setup.py py2app
 ```
-The bundle appears in `dist/INA.app`. Because of the namespace shims mentioned earlier, the required Google and Rubicon modules are baked into the bundle.
+The bundle appears in `dist/INA.app`. the required Google and Rubicon modules are baked into the bundle.
 
 To produce a signed DMG (for distribution within a lab or research group):
 ```bash
