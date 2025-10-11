@@ -795,12 +795,6 @@ class UnifiedSettingsDialog(QDialog):
         try:
             from ..utils.direct_llm_client import DirectLLMClient
 
-            # Temporarily create a client with this key
-            import os
-
-            original_key = os.getenv(API_CONFIG[provider.value]["api_key_env"])
-            os.environ[API_CONFIG[provider.value]["api_key_env"]] = api_key
-
             client = None
             try:
                 # Get currently selected model from UI
@@ -820,8 +814,10 @@ class UnifiedSettingsDialog(QDialog):
                 else:
                     model_name = self.model_combo.currentText()
 
-                # Create client with the selected model
-                client = DirectLLMClient(provider, model=selected_model)
+                # Create client with the selected model and current key input
+                client = DirectLLMClient(
+                    provider, model=selected_model, api_key=api_key
+                )
 
                 # Test with a simple prompt
                 result = client.test_api_key()
@@ -844,11 +840,6 @@ class UnifiedSettingsDialog(QDialog):
             finally:
                 if client is not None:
                     client.close()
-                # Restore original key
-                if original_key:
-                    os.environ[API_CONFIG[provider.value]["api_key_env"]] = original_key
-                else:
-                    os.environ.pop(API_CONFIG[provider.value]["api_key_env"], None)
 
         except Exception as e:
             # Close progress dialog in case of exception

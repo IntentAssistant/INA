@@ -97,12 +97,15 @@ class DirectLLMClient:
     """Direct API client for LLM services without Cloud Run backend"""
 
     def __init__(
-        self, provider: LLMProvider = DEFAULT_LLM_PROVIDER, model: Optional[str] = None
+        self,
+        provider: LLMProvider = DEFAULT_LLM_PROVIDER,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
     ):
         self.provider = provider
         api_manager = get_api_config_manager()
         self.config = api_manager.get_model_config(provider)
-        self.api_key = api_manager.get_api_key(provider)
+        self.api_key = api_key or api_manager.get_api_key(provider)
 
         # Override model if provided
         if model:
