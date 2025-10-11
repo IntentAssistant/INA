@@ -344,9 +344,6 @@ class IntentionalComputingApp(rumps.App):
     def _show_api_setup_guidance(self):
         """Show API setup guidance dialog"""
         try:
-            from .ui.api_settings_dialog import APISettingsDialog
-            from .ui.dialogs import Dialogs
-
             # Show information dialog first
             from PyQt6.QtWidgets import QMessageBox
 
@@ -411,16 +408,10 @@ class IntentionalComputingApp(rumps.App):
             result = msg.exec()
 
             if msg.clickedButton() == configure_btn:
-                # Open API settings dialog
-                dialog = APISettingsDialog()
-                dialog.exec()
+                # Open the unified settings dialog (Models tab)
+                self.open_api_settings()
             else:
-                # Show reminder about functionality
-                Dialogs.show_notification(
-                    "API Configuration",
-                    "Setup Reminder",
-                    "You can configure API settings anytime from Settings > User Settings > Configure API Settings",
-                )
+                print("[INIT] User chose to configure API later")
 
         except Exception as e:
             print(f"[ERROR] Failed to show API setup guidance: {e}")
@@ -432,6 +423,10 @@ class IntentionalComputingApp(rumps.App):
     @rumps.clicked("Settings", "API Settings")
     def show_api_settings(self, _):
         """Handle API settings menu click"""
+        self.open_api_settings()
+
+    def open_api_settings(self):
+        """Open unified settings dialog (Models tab available inside)"""
         from .ui.unified_settings_dialog import UnifiedSettingsDialog
 
         dialog = UnifiedSettingsDialog(app=self)
