@@ -1141,7 +1141,7 @@ class Dashboard(QWidget):
             self.show()
 
     def makeWindowSecure(self):
-        """창을 보안 모드로 설정하여 화면 캡처에서 제외 (설정에 따라)"""
+        """Apply secure window mode to exclude dashboard from screen capture when enabled"""
         if sys.platform == "darwin":
             try:
                 # Main window security

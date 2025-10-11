@@ -12,9 +12,6 @@ The source code accompanies our forthcoming publication and project site:
 INA is a macOS assistant that helps you stay aligned with your stated intentions.  
 It captures the current screen (with your permission), analyzes the context using an LLM, and gives lightweight nudges when your activity drifts away from the task you set for yourself. User feedback is looped back into the model prompts so the system learns your personal notion of “on task”.
 
-> This repository is the open-source release of the original KAIST AI research prototype (often referred to as AIM).  
-> Everything runs locally on your Mac and talks directly to the LLM provider you configure—no backend server required.
-
 ---
 
 ## Highlights
