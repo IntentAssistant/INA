@@ -1,53 +1,45 @@
-# INA (Intentional Computing Assistant)
+# INA (Intent Assistant)
 
-**Intent Assistant (INA)** is an experimental platform for our ongoing research on aligned intention monitoring.  
+INA is an AI-powered macOS assistant that helps you stay aligned with the intention you set for yourself.  
+Modern digital environments bombard us with distractions that sap focus and mood. INA monitors screen context (with your permission) and nudges you whenever your activity drifts away from the goal you declared.
+
+
+---
+
+## 🚀 Quick Start (For Users)
+Get going immediately—no developer setup required.
 
 - ⬇️ **Download the latest macOS build:** [`INA-v1.0.0.dmg`](https://github.com/IntentAssistant/INA/releases/latest/download/INA-v1.0.0.dmg)
-- 🖥️ **Platform:** macOS only (10.15 Catalina or later)
+- 🖥️ **Platform:** macOS 10.15 Catalina or later
 - 📘 **App Usage Guide:** [Google Docs](https://docs.google.com/document/d/1pVUKl5Z7BO9yZe7-pChIgcgEu0JM3DWsI0gXtaqBdew/edit?usp=sharing)
 
-The source code accompanies our forthcoming publication and project site:
+---
+
+## ✨ Key Features
+- **Real-time activity analysis** – periodically inspects the screen with an LLM to check if you’re still on-task.
+- **Major LLM integration** – works with OpenAI (GPT) or Google (Gemini) via API keys you supply.
+- **Feedback-driven learning** – “correct / incorrect” feedback tunes future judgments to your personal definition of on-task.
+- **100% local data** – screenshots stay in memory; logs and configs live under `~/INA_Data` and `~/.intention_app`.
+
+---
+
+## 🔬 Research Background
+INA is part of an ongoing research effort on aligned intention monitoring.  
+The repository accompanies our forthcoming paper and project site.
 
 - 📄 ArXiv preprint: _(link coming soon)_  
 - 🌐 Project page: _(link coming soon)_
 
-INA is a macOS assistant that helps you stay aligned with your stated intentions.  
-It captures the current screen (with your permission), analyzes the context using an LLM, and gives lightweight nudges when your activity drifts away from the task you set for yourself. User feedback is looped back into the model prompts so the system learns your personal notion of “on task”.
-
 ---
 
-## Highlights
-- **Real-time activity checks** – grabs a scaled screenshot every few seconds and classifies the activity with an LLM.
-- **Direct LLM integration** – works with OpenAI GPT-4o family or Google Gemini via API keys you provide.
-- **Feedback-aware learning** – thumbs-up / thumbs-down responses trigger reflection prompts that refine future judgments.
-- **All-local storage** – screenshots stay in RAM; logs, JSON traces, and configuration files live under `~/INA_Data` and `~/.intention_app`.
-- **macOS-native UI** – PyQt6 dashboard with Rubicon-ObjC bridges for menu bar integration, screen-capture privacy, and notification control.
-
----
-
-## Repository Layout
-
-| Path | What it contains |
-| --- | --- |
-| `src/app.py` | Entry point for the PyQt dashboard, notification manager, and capture/LLM loops. |
-| `src/ui/` | All widgets (dashboard, dialogs, settings, notifications) and the feedback/reflection manager. |
-| `src/config/` | App constants, prompt templates, and the API configuration manager that persists user settings. |
-| `src/utils/` | Screen/app detection helpers, direct LLM clients, launch-at-login helpers, etc. |
-| `src/logging/` | Local storage utilities writing `_llm_results.json`, `_feedbacks.json`, `_reflections.json`, etc. |
-| `setup.py` | py2app configuration used to create a standalone `.app`. |
-| `build_dmg.sh`, `create_dmg_background.py` | Convenience scripts for producing a DMG release. |
-| `architecture.md` | Extra diagrams and notes on the overall system design. |
-
----
-
-## Getting Started
+## 🛠️ Getting Started (For Developers)
 
 ### Prerequisites
-- macOS 10.15 (Catalina) or later
-- Python 3.9 or later (3.11 recommended)
-- Command-line tools: `xcode-select --install`
+- macOS 10.15 (Catalina) or later  
+- Python 3.9+ (3.11 recommended)  
+<!-- - Xcode Command Line Tools: `xcode-select --install` -->
 
-### Set up a virtual environment
+### Development Setup
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -55,41 +47,32 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Run the app
+### Running the App
 ```bash
 python main.py
 ```
+On first launch macOS will prompt for **Screen Recording**, **Accessibility**, and **Notifications** permissions.  
+Grant them in System Settings so INA can observe the screen and trigger nudges.
 
-On first launch the app requests macOS permissions for **Screen Recording**, **Accessibility**, and **Notifications**.  
-Grant them via System Settings so that the dashboard can observe the screen and show nudges.
-
-You can also use the helper script which prefers the system Python and warns about conda environments:
+Helper script (prefers the system Python and warns about conda environments):
 ```bash
 ./run_app.sh
 ```
 
 ---
 
-## Configuring LLM Access
+## 🔑 Configuring LLM API Keys
+INA calls LLM APIs directly using the key you provide.
 
-INA calls the LLM APIs directly; you supply the API key.
+1. Launch INA and open **Settings → Models**.  
+2. Select **OpenAI GPT** or **Google Gemini**.  
+3. Paste your API key and choose a model.  
+4. Click **Test API Key** to verify connectivity, then **Save**.  
 
-### Configure inside the app
-1. Launch the app.  
-2. Open **Settings → Models** (or follow the first-run prompt).  
-3. Choose **OpenAI GPT** or **Google Gemini**.  
-4. Paste your API key and pick a model.  
-5. Use **Test API Key** to verify connectivity.  
-6. Save. The encrypted config is stored locally in `~/.intention_app/api_config.json`.
+Configuration is stored locally at `~/.intention_app/api_config.json` (encrypted on disk).
 
-> ℹ️ For security and clarity, environment-variable based configuration is intentionally disabled. All credentials are entered and managed through the in-app settings screen.
-
-Supported models (as of v0.5):
-- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, or a custom model string.
-- **Google**: `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash`, etc.
-
-#### Estimated Token Costs
-Assuming an average of **26,500 input tokens** and **40 output tokens** per inference, running every **2 seconds** (≈1,800 inferences/hour):
+### Estimated Token Costs
+Assuming 1 inference / 2 seconds (~1,800 per hour) with ~26,500 input tokens and ~40 output tokens each:
 
 | Model | Price per hour (USD) |
 | --- | ---:|
@@ -105,73 +88,58 @@ Assuming an average of **26,500 input tokens** and **40 output tokens** per infe
 
 ---
 
-## Data & Logging
+## 🔧 Technical Details
 
-| Location | Purpose |
+<details>
+<summary><strong>📂 Repository Layout</strong></summary>
+
+| Path | Purpose |
 | --- | --- |
-| `~/INA_Data/session_data/<task_session>/` | Session-specific JSON logs (`_llm_results.json`, `_feedbacks.json`, `_reflections.json`). |
-| `~/INA_Data/logs/` | Console output captured via `main.py`’s tee logger. |
-| `~/.intention_app/api_config.json` | Stored API keys, model selections, windowing preferences. |
+| `src/app.py` | Orchestrates the PyQt dashboard, notifications, capture loop, and LLM scheduling. |
+| `src/ui/` | Widgets, dialogs, dashboard logic, and the feedback/reflection managers. |
+| `src/config/` | Constants, prompt builders, and the API configuration manager. |
+| `src/utils/` | Screen/app detectors, direct LLM clients, login helpers, etc. |
+| `src/logging/` | Local storage helpers for `_llm_results.json`, `_feedbacks.json`, `_reflections.json`, etc. |
+| `setup.py` | py2app configuration for packaging into a standalone `.app`. |
+| `build_dmg.sh`, `create_dmg_background.py` | Utilities for creating a DMG release. |
+| `architecture.md` | Detailed diagrams for capture and feedback flows. |
 
-Screenshots are never written to disk—they remain in memory long enough to be encoded for the LLM request.
+</details>
 
----
+<details>
+<summary><strong>📦 Building a macOS App Bundle</strong></summary>
 
-## Building a macOS App Bundle
-
-Create a standalone `.app` using py2app:
+Create the standalone bundle via py2app:
 ```bash
 python setup.py py2app
 ```
-The bundle appears in `dist/INA.app`. the required Google and Rubicon modules are baked into the bundle.
+Artifacts appear under `dist/INA.app`.  
 
-To produce a signed DMG (for distribution within a lab or research group):
+To generate a distributable DMG (with custom background):
 ```bash
 ./build_dmg.sh
 ```
-`create_dmg_background.py` regenerates the custom background graphic used by the DMG installer.
+> py2app does not automatically bundle `libffi`. If the script cannot locate `libffi.8.dylib`, set `LIBFFI_PATH` manually (e.g. `export LIBFFI_PATH=/Library/Frameworks/Python.framework/Versions/3.11/lib/libffi.8.dylib`) before building.
 
-> ⚠️ py2app does not automatically bundle `libffi`, which Python’s `_ctypes` module needs. The build script tries to locate `libffi.8.dylib` and exports `LIBFFI_PATH` for the duration of the build. If it cannot find it automatically, set `LIBFFI_PATH` manually before invoking the script, for example:  
-> `export LIBFFI_PATH=/Library/Frameworks/Python.framework/Versions/3.11/lib/libffi.8.dylib`
+> py2app copies whatever exists in the active virtual environment. Run builds from the same venv you used for `pip install -r requirements.txt`.
 
-> ℹ️ py2app copies whatever is installed in the active Python environment’s `site-packages`. Always run the build command (or `./build_dmg.sh`) from the same virtual environment where you ran `pip install -r requirements.txt`.
+</details>
 
-### Clean build checklist
-1. Create and activate a fresh virtual environment.  
-2. `pip install -r requirements.txt`  
-3. Ensure `python3` on your PATH is the same interpreter used for the virtual environment.  
-4. Confirm you can run `python main.py`.  
-5. Run `./build_dmg.sh` (or `python setup.py py2app`) from the same virtual environment to package the app.  
-6. Verify the resulting `dist/INA.app` launches on a clean macOS machine.
+<details>
+<summary><strong>📊 Data & Logging</strong></summary>
 
----
+- Session logs (`_llm_results.json`, `_feedbacks.json`, `_reflections.json`) live in `~/INA_Data/session_data/<task_session>/`.  
+- Console output is tee’d into `~/INA_Data/logs/`.  
+- API settings and UI preferences are stored in `~/.intention_app/api_config.json`.  
+- Screenshots are never written to disk; they exist in RAM only long enough to be encoded for the LLM API call.  
+- Downstream data handling respects each provider’s API policy (OpenAI, Google).
 
-## Development Notes
-- The dashboard UI is written with PyQt6; macOS window behaviours (float-on-top, screen capture exclusion) are implemented through Rubicon-ObjC bridges.
-- Prompt templates live in `src/config/prompts.py`. Reflections triggered by user feedback are parsed and saved in the session folder for transparency.
-- Additional architecture notes and old design docs are in `architecture.md`.
+</details>
 
----
+<details>
+<summary><strong>🧱 Architecture</strong></summary>
 
-## Contributing
-1. Fork the repository and create a feature branch.  
-2. Install dependencies via `requirements.txt` (see above).  
-3. Run `python main.py` locally to verify changes.  
-4. Keep new files ASCII when possible and document non-obvious logic with concise comments.  
-5. Submit a pull request describing the change and any testing performed.
-
-Bug reports and feature suggestions are welcome. Please include macOS version, Python version, and whether you’re running from source or a packaged app.
-
----
-
----
-
-## Architecture & License
-
-<details open>
-<summary>🧱 Architecture Overview</summary>
-
-- High-level flow:
+High-level flow:
 
 ```mermaid
 flowchart LR
@@ -194,13 +162,18 @@ flowchart LR
     Manager --> Notify
 ```
 
-- See [`architecture.md`](architecture.md) for detailed capture and reflection flows.
+For full diagrams (capture pipeline, feedback/reflection) see [`architecture.md`](architecture.md).
 
 </details>
 
-<details>
-<summary>📜 MIT License</summary>
+---
 
-This project is released under the MIT License. See [`LICENSE`](LICENSE) for details.
+## 🤝 Contributing
+- Bug reports and feature suggestions are welcome through GitHub Issues.  
+- Before opening a Pull Request, please start a discussion describing the change.  
+- Keep contributions ASCII when possible and document complex logic with concise comments.
 
-</details>
+---
+
+## 📜 License
+This project is released under the [MIT License](LICENSE).
