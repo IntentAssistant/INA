@@ -35,14 +35,9 @@ It captures the current screen (with your permission), analyzes the context usin
 | `src/config/` | App constants, prompt templates, and the API configuration manager that persists user settings. |
 | `src/utils/` | Screen/app detection helpers, direct LLM clients, launch-at-login helpers, etc. |
 | `src/logging/` | Local storage utilities writing `_llm_results.json`, `_feedbacks.json`, `_reflections.json`, etc. |
-| `google/` | Namespace stub so py2app can bundle Google’s `google-genai` package (see below). |
-| `rubicon/` | Namespace stub so py2app can bundle `rubicon-objc` (macOS Objective‑C bridge). |
 | `setup.py` | py2app configuration used to create a standalone `.app`. |
 | `build_dmg.sh`, `create_dmg_background.py` | Convenience scripts for producing a DMG release. |
 | `architecture.md` | Extra diagrams and notes on the overall system design. |
-
-### Why the `google/` and `rubicon/` folders exist
-Both directories only contain a minimal `__init__.py`. They make py2app treat Google’s namespace packages (`google.genai`) and Rubicon’s Objective‑C bridge (`rubicon.objc`) as regular packages during bundling. **Do not delete them** unless you replace them with an equivalent packaging shim—without them, the packaged app will crash at runtime with `ModuleNotFoundError`.
 
 ---
 
@@ -137,9 +132,18 @@ To produce a signed DMG (for distribution within a lab or research group):
 ```
 `create_dmg_background.py` regenerates the custom background graphic used by the DMG installer.
 
-> ℹ️ `build_dmg.sh` automatically vendors the `google-genai` and `rubicon-objc` Python packages into `src/vendor/` so the resulting `.dmg` works on machines without those dependencies installed. Make sure the build machine has internet access when running the script.
+> ⚠️ py2app does not automatically bundle `libffi`, which Python’s `_ctypes` module needs. The build script tries to locate `libffi.8.dylib` and exports `LIBFFI_PATH` for the duration of the build. If it cannot find it automatically, set `LIBFFI_PATH` manually before invoking the script, for example:  
+> `export LIBFFI_PATH=/Library/Frameworks/Python.framework/Versions/3.11/lib/libffi.8.dylib`
 
-> ⚠️ Keep the generated `src/vendor/` directory with the app bundle—those files are required for Google Gemini and Rubicon functionality when users run the packaged app.
+> ℹ️ py2app copies whatever is installed in the active Python environment’s `site-packages`. Always run the build command (or `./build_dmg.sh`) from the same virtual environment where you ran `pip install -r requirements.txt`.
+
+### Clean build checklist
+1. Create and activate a fresh virtual environment.  
+2. `pip install -r requirements.txt`  
+3. Ensure `python3` on your PATH is the same interpreter used for the virtual environment.  
+4. Confirm you can run `python main.py`.  
+5. Run `./build_dmg.sh` (or `python setup.py py2app`) from the same virtual environment to package the app.  
+6. Verify the resulting `dist/INA.app` launches on a clean macOS machine.
 
 ---
 

@@ -4,11 +4,6 @@ import rumps
 import logging
 import time
 import regex as re
-from pathlib import Path
-
-VENDOR_PATH = Path(__file__).resolve().parent / "vendor"
-if VENDOR_PATH.exists():
-    sys.path.insert(0, str(VENDOR_PATH))
 
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog

@@ -68,6 +68,18 @@ OPTIONS = {
     "site_packages": True,
 }
 
+# Add optional frameworks (e.g., libffi) if provided
+frameworks = []
+libffi_path = os.environ.get("LIBFFI_PATH")
+if libffi_path:
+    if os.path.exists(libffi_path):
+        frameworks.append(libffi_path)
+    else:
+        print(f"[WARN] LIBFFI_PATH was set but not found: {libffi_path}")
+        print("[WARN] The packaged app may fail to load _ctypes without libffi.")
+if frameworks:
+    OPTIONS["frameworks"] = frameworks
+
 # --- Setup ---
 setup(
     name=APP_NAME,

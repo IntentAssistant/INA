@@ -16,30 +16,48 @@ if [ -f "create_dmg_background.py" ]; then
     python3 create_dmg_background.py
 fi
 
-# --- 3. Vendor third-party dependencies ---
-VENDOR_DIR="src/vendor"
-echo "Preparing vendored dependencies in ${VENDOR_DIR}..."
-rm -rf "${VENDOR_DIR}"
-mkdir -p "${VENDOR_DIR}"
+# --- 3. Locate libffi (required for _ctypes inside the app bundle) ---
+LIBFFI_PATH=$(python3 - <<'PY'
+import sys
+from pathlib import Path
 
-if ! python3 -m pip install --upgrade google-genai --target "${VENDOR_DIR}"; then
-    echo "❌ Failed to vendor google-genai. Please ensure you have network access and try again."
-    exit 1
+candidates = []
+exe = Path(sys.executable).resolve()
+
+# Search upwards from the Python executable for a lib directory containing libffi
+for parent in exe.parents:
+    lib_dir = parent / "lib"
+    for name in ("libffi.8.dylib", "libffi.7.dylib", "libffi.dylib"):
+        candidate = lib_dir / name
+        if candidate.exists():
+            print(candidate)
+            raise SystemExit
+
+# Check common Homebrew locations
+for base in (Path("/opt/homebrew/opt/libffi/lib"), Path("/usr/local/opt/libffi/lib")):
+    for name in ("libffi.8.dylib", "libffi.dylib"):
+        candidate = base / name
+        if candidate.exists():
+            print(candidate)
+            raise SystemExit
+
+# Nothing found
+PY
+)
+
+if [ -n "$LIBFFI_PATH" ]; then
+    export LIBFFI_PATH
+    echo "Found libffi at: ${LIBFFI_PATH}"
+else
+    echo "⚠️  Could not automatically locate libffi."
+    echo "    Set LIBFFI_PATH to the full path of libffi.dylib before rerunning this script."
 fi
 
-if ! python3 -m pip install --upgrade rubicon-objc --target "${VENDOR_DIR}"; then
-    echo "❌ Failed to vendor rubicon-objc. Please ensure you have network access and try again."
-    exit 1
-fi
-
-# Ensure vendored packages are importable during the build
-export PYTHONPATH="$(pwd)/${VENDOR_DIR}:${PYTHONPATH}"
-
-# --- 4. Build the App ---
+# --- 5. Build the App ---
 echo "Building INA.app..."
 python3 setup.py py2app
 
-# --- 5. Build the DMG ---
+# --- 6. Build the DMG ---
 if [ -d "dist/INA.app" ]; then
     APP_VERSION=$(python3 -c "from src.config.constants import APP_VERSION; print(APP_VERSION)")
     echo "Building DMG file for INA v${APP_VERSION}..."
@@ -50,7 +68,7 @@ else
     exit 1
 fi
 
-# --- 6. Final Summary ---
+# --- 7. Final Summary ---
 echo ""
 echo "🎉 Build complete!"
 echo "You can find the DMG in the 'dist/' directory."

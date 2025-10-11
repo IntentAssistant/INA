@@ -53,6 +53,3 @@ dist/
 build/ 
 aim_env/
 *.dmg
-
-# Vendored dependencies populated during build
-src/vendor/
