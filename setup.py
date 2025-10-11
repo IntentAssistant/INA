@@ -26,7 +26,7 @@ DATA_FILES.append((".config", []))
 
 # --- py2app Options ---
 OPTIONS = {
-    "argv_emulation": True,
+    "argv_emulation": False,
     "iconfile": ICON_PATH,
     "plist": {
         "CFBundleName": APP_NAME,
