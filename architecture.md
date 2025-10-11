@@ -91,7 +91,7 @@ sequenceDiagram
 - **Feedback loop** is managed by the dashboard + `FeedbackManager`, enriching future prompts with reflections.
 - **Auto-launch** handled via `ensure_login_item()` (`src/utils/launch_at_login.py`) scheduled after initial load.
 
-## Incorrect Feedback Reflection System
+## Feedback System
 
 The reflection subsystem learns from user “❌” feedback to improve subsequent analyses.
 
@@ -140,16 +140,16 @@ graph LR
 
 ```mermaid
 graph TD
-    A["❌ User Marks Response Incorrect<br/>Dashboard.send_feedback('incorrect')"] --> B{"Data Available?<br/>feedback_manager &&<br/>last_llm_response &&<br/>current_task"}
+    A["❌ User Marks Response Incorrect<br/>Dashboard.handle_feedback_click('bad')"] --> B{"Data Available?<br/>feedback_manager &&<br/>last_llm_response &&<br/>current_task"}
 
     B -->|No| C["Log Warning<br/>Skip Reflection"]
     B -->|Yes| D["Extract Data<br/>• task_name<br/>• previous_reason<br/>• image_path"]
 
-    D --> E["FeedbackManager<br/>process_negative_feedback()"]
+    D --> E["FeedbackManager<br/>process_feedback()"]
     E --> F["Generate Reflection Prompt<br/>format_reflection_prompt()"]
     F --> G["Create ReflectionThread<br/>Background QThread"]
 
-    G --> H["Send to LLM API<br/>LLM_CHAT_API_ENDPOINT"]
+    G --> H["Generate Reflection via LLM API<br/>analyze_reflection()"]
     H --> I{"LLM Response<br/>Success?"}
 
     I -->|Error| J["Handle Error<br/>Log & Continue"]
@@ -186,7 +186,7 @@ sequenceDiagram
 
     alt Data Available
         D->>D: Extract task_name / previous_reason / image_path
-        D->>FM: process_negative_feedback()
+        D->>FM: process_feedback()
         FM->>FM: format_reflection_prompt()
         FM->>RT: start ReflectionThread
         RT->>RT: encode image + prepare payload
@@ -223,8 +223,8 @@ sequenceDiagram
 ```
 
 ### Key Touchpoints
-- Dashboard `send_feedback("incorrect")`: `src/ui/dashboard.py:1259-1282`
-- `FeedbackManager.process_negative_feedback()`: `src/ui/feedback_manager.py:104-143`
+- Dashboard `handle_feedback_click("bad")`: `src/ui/dashboard.py:1477-1640`
+- `FeedbackManager.process_feedback()`: `src/ui/feedback_manager.py:463-535`
 - `ReflectionThread`: handles background LLM calls and emits success/error signals.
 - `PromptConfig.save_reflection()`: persists learned intent descriptions for reuse.
 - `ThreadManager.set_reflection_data()`: updates in-memory context for future analyses.

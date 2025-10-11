@@ -163,6 +163,64 @@ Bug reports and feature suggestions are welcome. Please include macOS version, P
 
 ---
 
-## License
+---
+
+## Architecture & License
+
+<details open>
+<summary>🧱 Architecture Overview</summary>
+
+- High-level component map:
+
+```mermaid
+flowchart LR
+    subgraph Entry
+        Main["main.py<br/>Entry + logging setup"]
+        App["IntentionalComputingApp<br/>src/app.py"]
+    end
+
+    subgraph Core
+        TM["ThreadManager<br/>src/manager.py"]
+        Dash["Dashboard (PyQt UI)<br/>src/ui/dashboard.py"]
+        Notify["NotificationManager<br/>src/ui/notification.py"]
+        Storage["LocalStorage<br/>src/logging/storage.py"]
+        Prompt["PromptConfig<br/>src/config/prompt_config.py"]
+        APIConfig["APIConfigManager<br/>src/config/api_config.py"]
+    end
+
+    subgraph LLM
+        LLMThread["LLMAnalysisThread<br/>src/utils/llm_analysis.py"]
+        DirectClient["DirectLLMClient<br/>src/utils/direct_llm_client.py"]
+        LLMAPI[(LLM API Providers)]
+    end
+
+    Main --> App
+    App --> TM
+    App --> Dash
+    App --> Storage
+    App --> Notify
+    App --> Prompt
+    App --> APIConfig
+    Dash --> TM
+    Dash --> Notify
+    Dash --> Storage
+    TM --> LLMThread
+    TM --> Storage
+    TM --> Notify
+    LLMThread --> DirectClient
+    DirectClient --> LLMAPI
+    Prompt --> TM
+    APIConfig --> TM
+    APIConfig --> DirectClient
+```
+
+- See [`architecture.md`](architecture.md) for full diagrams (capture flow, reflection loop) and context.
+
+</details>
+
+<details>
+<summary>📜 MIT License</summary>
+
 This project is released under the MIT License. See [`LICENSE`](LICENSE) for details.
-w
+
+</details>
