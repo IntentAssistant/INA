@@ -137,7 +137,9 @@ To produce a signed DMG (for distribution within a lab or research group):
 ```
 `create_dmg_background.py` regenerates the custom background graphic used by the DMG installer.
 
-> ⚠️ If you remove the `google/` or `rubicon/` directories, py2app will no longer discover those namespace packages and the built app will crash when it tries to import `google.genai` or `rubicon.objc`.
+> ℹ️ `build_dmg.sh` automatically vendors the `google-genai` and `rubicon-objc` Python packages into `src/vendor/` so the resulting `.dmg` works on machines without those dependencies installed. Make sure the build machine has internet access when running the script.
+
+> ⚠️ Keep the generated `src/vendor/` directory with the app bundle—those files are required for Google Gemini and Rubicon functionality when users run the packaged app.
 
 ---
 

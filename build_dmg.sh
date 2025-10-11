@@ -16,11 +16,30 @@ if [ -f "create_dmg_background.py" ]; then
     python3 create_dmg_background.py
 fi
 
-# --- 3. Build the App ---
+# --- 3. Vendor third-party dependencies ---
+VENDOR_DIR="src/vendor"
+echo "Preparing vendored dependencies in ${VENDOR_DIR}..."
+rm -rf "${VENDOR_DIR}"
+mkdir -p "${VENDOR_DIR}"
+
+if ! python3 -m pip install --upgrade google-genai --target "${VENDOR_DIR}"; then
+    echo "❌ Failed to vendor google-genai. Please ensure you have network access and try again."
+    exit 1
+fi
+
+if ! python3 -m pip install --upgrade rubicon-objc --target "${VENDOR_DIR}"; then
+    echo "❌ Failed to vendor rubicon-objc. Please ensure you have network access and try again."
+    exit 1
+fi
+
+# Ensure vendored packages are importable during the build
+export PYTHONPATH="$(pwd)/${VENDOR_DIR}:${PYTHONPATH}"
+
+# --- 4. Build the App ---
 echo "Building INA.app..."
 python3 setup.py py2app
 
-# --- 4. Build the DMG ---
+# --- 5. Build the DMG ---
 if [ -d "dist/INA.app" ]; then
     APP_VERSION=$(python3 -c "from src.config.constants import APP_VERSION; print(APP_VERSION)")
     echo "Building DMG file for INA v${APP_VERSION}..."
@@ -31,7 +50,7 @@ else
     exit 1
 fi
 
-# --- 5. Final Summary ---
+# --- 6. Final Summary ---
 echo ""
 echo "🎉 Build complete!"
 echo "You can find the DMG in the 'dist/' directory."
