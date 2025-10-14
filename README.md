@@ -1,8 +1,6 @@
 # INA (Intent Assistant)
 
-INA is an AI-powered macOS assistant that helps you stay aligned with the intention you set for yourself.  
-Modern digital environments bombard us with distractions that sap focus and mood. INA monitors screen context (with your permission) and nudges you whenever your activity drifts away from the goal you declared.
-
+Working on digital devices, people often face distractions that can lead to a decline in productivity. INA is an intelligent assistant designed to address this challenge. It elicits a user’s intention, clarifies it, and then leverages a Large Language Model (LLM) to continuously analyze on-screen activity. When deviations from the stated goal occur, it provides gentle nudges. Unlike simple rule-based blockers, INA is designed to be a collaborative assistant that understands user context, supporting users in aligning their digital behavior with their intentions.
 
 ---
 
@@ -28,7 +26,7 @@ INA is part of an ongoing research effort on aligned intention monitoring.
 The repository accompanies our forthcoming paper and project site.
 
 - 📄 ArXiv preprint: _(link coming soon)_  
-- 🌐 Project page: _(link coming soon)_
+- 🌐 Project page: [link](intentassistant.github.io)
 
 ---
 
