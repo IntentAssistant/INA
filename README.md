@@ -4,7 +4,7 @@ Working on digital devices, people often face distractions that can lead to a de
 
 <!-- - 📄 ArXiv Paper: _(link coming soon)_   -->
 - 📄 Paper: [link](https://drive.google.com/file/d/1KzOcsaXopV7ZuynpvACJTEcrixqMOkSU/view?usp=sharing)
-- 🌐 Project page: [link](intentassistant.github.io)
+- 🌐 Project page: [link](https://intentassistant.github.io)
 
 ---
 
