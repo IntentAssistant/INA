@@ -2,6 +2,10 @@
 
 Working on digital devices, people often face distractions that can lead to a decline in productivity. INA is an intelligent assistant designed to address this challenge. It elicits a user’s intention, clarifies it, and then leverages a Large Language Model (LLM) to continuously analyze on-screen activity. When deviations from the stated goal occur, it provides gentle nudges. Unlike simple rule-based blockers, INA is designed to be a collaborative assistant that understands user context, supporting users in aligning their digital behavior with their intentions.
 
+<!-- - 📄 ArXiv Paper: _(link coming soon)_   -->
+- 📄 Paper: [linke](https://drive.google.com/file/d/1KzOcsaXopV7ZuynpvACJTEcrixqMOkSU/view?usp=sharing)
+- 🌐 Project page: [link](intentassistant.github.io)
+
 ---
 
 ## 🚀 Quick Start (For Users)
@@ -12,23 +16,15 @@ Get going immediately—no developer setup required.
 - 📘 **App Usage Guide:** [Google Docs](https://docs.google.com/document/d/1pVUKl5Z7BO9yZe7-pChIgcgEu0JM3DWsI0gXtaqBdew/edit?usp=sharing)
 
 ---
-
+<!-- 
 ## ✨ Key Features
 - **Real-time activity analysis** – periodically inspects the screen with an LLM to check if you’re still on-task.
 - **Major LLM integration** – works with OpenAI (GPT) or Google (Gemini) via API keys you supply.
 - **Feedback-driven learning** – “correct / incorrect” feedback tunes future judgments to your personal definition of on-task.
 - **100% local data** – screenshots stay in memory; logs and configs live under `~/INA_Data` and `~/.intention_app`.
 
----
 
-## 🔬 Research Background
-INA is part of an ongoing research effort on aligned intention monitoring.  
-The repository accompanies our forthcoming paper and project site.
-
-- 📄 ArXiv preprint: _(link coming soon)_  
-- 🌐 Project page: [link](intentassistant.github.io)
-
----
+--- -->
 
 ## 🛠️ Getting Started (For Developers)
 
@@ -74,15 +70,15 @@ Assuming 1 inference / 2 seconds (~1,800 per hour) with ~26,500 input tokens and
 
 | Model | Price per hour (USD) |
 | --- | ---:|
-| GPT-4o mini | 7.20 |
-| GPT-5 | 60.00 |
-| GPT-5 mini | 12.00 |
-| GPT-4.1 | 96.00 |
-| Gemini 2.5 Pro | 60.00 |
-| Gemini 2.5 Flash | 14.50 |
-| Gemini 2.5 Flash-Lite *(recommended)* | 4.80 |
-| Gemini 2.0 Flash | 4.80 |
-| Gemini 2.0 Flash-Lite | 3.60 |
+| GPT-4o mini | 7.2 |
+| GPT-5 | 60.0 |
+| GPT-5 mini | 12.0 |
+| GPT-4.1 | 96.0 |
+| Gemini 2.5 Pro | 60.0 |
+| Gemini 2.5 Flash | 14.5 |
+| Gemini 2.5 Flash-Lite *(recommended)* | 4.8 |
+| Gemini 2.0 Flash | 4.8 |
+| Gemini 2.0 Flash-Lite | 3.6 |
 
 ---
 
@@ -117,9 +113,9 @@ To generate a distributable DMG (with custom background):
 ```bash
 ./build_dmg.sh
 ```
-> py2app does not automatically bundle `libffi`. If the script cannot locate `libffi.8.dylib`, set `LIBFFI_PATH` manually (e.g. `export LIBFFI_PATH=/Library/Frameworks/Python.framework/Versions/3.11/lib/libffi.8.dylib`) before building.
+<!-- > py2app does not automatically bundle `libffi`. If the script cannot locate `libffi.8.dylib`, set `LIBFFI_PATH` manually (e.g. `export LIBFFI_PATH=/Library/Frameworks/Python.framework/Versions/3.11/lib/libffi.8.dylib`) before building.
 
-> py2app copies whatever exists in the active virtual environment. Run builds from the same venv you used for `pip install -r requirements.txt`.
+> py2app copies whatever exists in the active virtual environment. Run builds from the same venv you used for `pip install -r requirements.txt`. -->
 
 </details>
 
@@ -169,7 +165,6 @@ For full diagrams (capture pipeline, feedback/reflection) see [`architecture.md`
 ## 🤝 Contributing
 - Bug reports and feature suggestions are welcome through GitHub Issues.  
 - Before opening a Pull Request, please start a discussion describing the change.  
-- Keep contributions ASCII when possible and document complex logic with concise comments.
 
 ---
 
