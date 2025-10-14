@@ -3,7 +3,7 @@
 Working on digital devices, people often face distractions that can lead to a decline in productivity. INA is an intelligent assistant designed to address this challenge. It elicits a user’s intention, clarifies it, and then leverages a Large Language Model (LLM) to continuously analyze on-screen activity. When deviations from the stated goal occur, it provides gentle nudges. Unlike simple rule-based blockers, INA is designed to be a collaborative assistant that understands user context, supporting users in aligning their digital behavior with their intentions.
 
 <!-- - 📄 ArXiv Paper: _(link coming soon)_   -->
-- 📄 Paper: [linke](https://drive.google.com/file/d/1KzOcsaXopV7ZuynpvACJTEcrixqMOkSU/view?usp=sharing)
+- 📄 Paper: [link](https://drive.google.com/file/d/1KzOcsaXopV7ZuynpvACJTEcrixqMOkSU/view?usp=sharing)
 - 🌐 Project page: [link](intentassistant.github.io)
 
 ---
