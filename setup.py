@@ -1,10 +1,10 @@
 from setuptools import setup
 import os
 
-# --- App Configuration (Hardcoded for INA) ---
-APP_NAME = "INA"
+# --- App Configuration (Hardcoded for Intent Assistant) ---
+APP_NAME = "Intent Assistant"
 APP_SCRIPT = "main.py"
-BUNDLE_ID = "com.ina.app"
+BUNDLE_ID = "com.intentassistant.app"
 ICON_PATH = "src/assets/INA.png"
 APP_VERSION = "1.0.0"
 
@@ -28,6 +28,7 @@ DATA_FILES.append((".config", []))
 OPTIONS = {
     "argv_emulation": False,
     "iconfile": ICON_PATH,
+    "compressed": False,  # Don't compress into python311.zip for easier code signing
     "plist": {
         "CFBundleName": APP_NAME,
         "CFBundleDisplayName": APP_NAME,
@@ -38,7 +39,7 @@ OPTIONS = {
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,
         "NSHumanReadableCopyright": "Copyright © 2025 Intentional Computing . All rights reserved.",
-        "NSScreenCaptureUsageDescription": "INA captures your screen to help you stay focused on your intentions.",
+        "NSScreenCaptureUsageDescription": "Intent Assistant captures your screen to help you stay focused on your intentions.",
     },
     # Standard packages that are easy for py2app to find
     "packages": [

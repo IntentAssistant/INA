@@ -2,8 +2,8 @@
 from __future__ import unicode_literals
 import os
 
-# --- Basic Settings (Hardcoded for INA) ---
-app_name = "INA"
+# --- Basic Settings (Hardcoded for Intent Assistant) ---
+app_name = "Intent Assistant"
 application = f"dist/{app_name}.app"
 appname = os.path.basename(application)
 
