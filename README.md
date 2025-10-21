@@ -11,7 +11,7 @@ Working on digital devices, people often face distractions that can lead to a de
 ## 🚀 Quick Start (For Users)
 Get going immediately—no developer setup required.
 
-- ⬇️ **Download the latest macOS build:** [`INA-v1.0.0.dmg`](https://github.com/IntentAssistant/INA/releases/latest/download/INA-v1.0.0.dmg)
+- ⬇️ **Download the latest macOS build:** [`INA-v1.0.0.dmg`](https://github.com/IntentAssistant/INA/releases/latest/download/IntentAssistant-v1.0.0.dmg)
 - 🖥️ **Platform:** macOS 10.15 Catalina or later
 - 📘 **App Usage Guide:** [Google Docs](https://docs.google.com/document/d/1pVUKl5Z7BO9yZe7-pChIgcgEu0JM3DWsI0gXtaqBdew/edit?usp=sharing)
 
