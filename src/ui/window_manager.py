@@ -155,7 +155,7 @@ class WindowManager:
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
         clarification_window.setAttribute(
-            Qt.WidgetAttribute.WA_ShowWithoutActivating, True
+            Qt.WidgetAttribute.WA_ShowWithoutActivating, False
         )
         clarification_window.setFixedSize(DASHBOARD_WIDTH, 300)
 
@@ -206,6 +206,7 @@ class WindowManager:
         clarification_input.returnPressed.connect(
             self.dashboard.send_clarification_message
         )
+        clarification_input.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Send button
         clarification_send_button = QPushButton(SEND_BUTTON_TEXT)
@@ -219,6 +220,9 @@ class WindowManager:
         input_layout.addWidget(clarification_input)
         input_layout.addWidget(clarification_send_button)
         clarification_layout.addWidget(input_area)
+
+        clarification_window.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        clarification_window.setFocusProxy(clarification_input)
 
         # Apply styling
         clarification_window.setStyleSheet(
@@ -248,6 +252,11 @@ class WindowManager:
                 padding: 8px 12px;
                 font-size: 13px;
                 color: white;
+            }
+            #clarificationInput:focus {
+                background-color: #3A3A3A;
+                border: 1px solid #FFD60A;
+                padding: 7px 11px;
             }
             #clarificationSendButton {
                 background-color: #FFD60A;

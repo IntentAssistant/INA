@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QDialog,
     QSlider,
+    QApplication,
 )
 from PyQt6.QtCore import (
     Qt,
@@ -29,12 +30,14 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QTextOption,
+    QTextCursor,
     QPainter,
     QPen,
     QBrush,
     QColor,
     QFont,
     QDesktopServices,
+    QGuiApplication,
 )
 
 import sys
@@ -45,7 +48,7 @@ import requests
 import time
 import re
 from datetime import datetime
-from AppKit import NSWindow, NSWindowSharingNone, NSWindowSharingReadOnly
+from AppKit import NSWindow, NSWindowSharingNone, NSWindowSharingReadOnly, NSApp
 from ctypes import c_void_p
 from ..config.constants import (
     WINDOW_MIN_WIDTH,
@@ -228,10 +231,9 @@ class Dashboard(QWidget):
             # Still try to display empty state
             self.load_and_display_today_history()
 
-        # Show history window on startup
-        QTimer.singleShot(
-            500, self.show_history_window
-        )  # Small delay to ensure UI is ready
+        # Show history window and focus intention input on startup
+        QTimer.singleShot(500, self.show_history_window)
+        QTimer.singleShot(600, self._focus_task_input_initial)
 
         # Make windows secure from screen capture
         self.window_manager.make_windows_secure(self.exclude_from_capture)
@@ -463,6 +465,7 @@ class Dashboard(QWidget):
         )
         self.task_display.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
         self.task_display.mousePressEvent = self.task_display_clicked
+        self.task_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # Start/Stop button
         self.start_button = QPushButton(START_BUTTON_TEXT)  # Start/stop button
@@ -759,6 +762,40 @@ class Dashboard(QWidget):
             # Text changed but not due to IME composition
             pass
 
+    def keyPressEvent(self, event):
+        """Handle global Enter key presses for keyboard-only workflow."""
+        if (
+            event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        ):
+            if self._handle_enter_key_flow():
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def _handle_enter_key_flow(self) -> bool:
+        """Return True if Enter should trigger the Start button."""
+        if getattr(self, "is_capturing", False):
+            return False
+
+        start_button = getattr(self, "start_button", None)
+        if not start_button or not start_button.isEnabled() or not start_button.isVisible():
+            return False
+
+        # Avoid triggering while the user is still typing the intention text
+        if self.input_container.isVisible():
+            return False
+
+        clarification_input = getattr(self, "clarification_input", None)
+        if clarification_input and clarification_input.isEnabled():
+            return False
+
+        if not getattr(self, "_current_task", None):
+            return False
+
+        self.toggle_capture()
+        return True
+
     def set_task(self):
         """Set the current task from the input field"""
         # User config removed - direct local usage only
@@ -773,9 +810,8 @@ class Dashboard(QWidget):
             self.open_api_settings()
             return
 
-        # Force any pending IME composition to complete
+        # Force any pending IME composition to complete by temporarily clearing focus
         self.task_input.clearFocus()
-        self.task_input.setFocus()
 
         # Get the text after ensuring IME completion
         task = self.task_input.toPlainText().strip()
@@ -838,6 +874,7 @@ class Dashboard(QWidget):
 
         # Clear input field only after everything is set
         self.task_input.clear()
+        QTimer.singleShot(400, self._focus_clarification_input)
 
     def show_input_state(self):
         """Show input container (State 1) and hide task container."""
@@ -885,6 +922,10 @@ class Dashboard(QWidget):
         self.task_container.updateGeometry()
         self.layout().activate()
 
+        clarification_input = getattr(self, "clarification_input", None)
+        if clarification_input:
+            clarification_input.releaseKeyboard()
+
         self.task_input.setFocus()
 
     def show_task_state(self):
@@ -901,6 +942,45 @@ class Dashboard(QWidget):
         # Force layout update without changing window size
         self.task_container.updateGeometry()
         self.layout().activate()
+
+        self.task_display.clearFocus()
+
+    def _focus_task_input_initial(self, retries: int = 6):
+        """Bring the dashboard to the front and focus the intention input."""
+        task_input = getattr(self, "task_input", None)
+        if not task_input:
+            return
+
+        # If focus already set, nothing more to do
+        if task_input.hasFocus() and QGuiApplication.focusObject() is task_input:
+            return
+
+        try:
+            NSApp.activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
+        app = QApplication.instance()
+        if app:
+            app.setActiveWindow(self)
+
+        self.raise_()
+        self.activateWindow()
+        task_input.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+        task_input.moveCursor(QTextCursor.MoveOperation.End)
+        if hasattr(task_input, "ensureCursorVisible"):
+            task_input.ensureCursorVisible()
+        QGuiApplication.processEvents()
+
+        focused_obj = QGuiApplication.focusObject()
+        if task_input.hasFocus() and focused_obj is task_input:
+            print("[FOCUS] Intention input focused on startup")
+            return
+
+        if retries > 0:
+            QTimer.singleShot(
+                200, lambda: self._focus_task_input_initial(retries - 1)
+            )
 
     def toggle_capture(self):
         """Toggle capturing on/off"""
@@ -997,6 +1077,9 @@ class Dashboard(QWidget):
             self.start_button.setText(STOP_BUTTON_TEXT)
             self.is_capturing = True
             self.capture_started.emit()
+            self.start_button.setAutoDefault(False)
+            self.start_button.setDefault(False)
+            self.start_button.clearFocus()
 
             # Update to "set/started" state with message
             self.message_label.setText(CLICK_MESSAGE)
@@ -1314,9 +1397,80 @@ class Dashboard(QWidget):
         # Start new clarification cycle
         self.llm_client.start_clarification_cycle(initial_task)
 
+        # Move focus to clarification input so the user can answer immediately
+        QTimer.singleShot(ANIMATION_SHOW_DURATION + 200, self._focus_clarification_input)
+
     def hide_clarification_window(self):
         """Hide clarification window with animation"""
         self.window_manager.hide_window_with_animation("clarification")
+        clarification_window = getattr(self, "clarification_window", None)
+        if clarification_window:
+            clarification_window.setAttribute(
+                Qt.WidgetAttribute.WA_ShowWithoutActivating, False
+            )
+        clarification_input = getattr(self, "clarification_input", None)
+        if clarification_input:
+            clarification_input.releaseKeyboard()
+
+    def _focus_clarification_input(self, retries: int = 5):
+        """Give keyboard focus to the clarification input field."""
+        input_field = getattr(self, "clarification_input", None)
+        if not input_field:
+            print("[FOCUS] Clarification input not available")
+            return
+        if not input_field.isEnabled():
+            print("[FOCUS] Clarification input exists but is disabled")
+            return
+        if not input_field.isVisible():
+            print("[FOCUS] Clarification input is not visible yet")
+            if retries > 0:
+                QTimer.singleShot(
+                    120, lambda: self._focus_clarification_input(retries - 1)
+                )
+            return
+
+        clarification_window = getattr(self, "clarification_window", None)
+        print(
+            f"[FOCUS] Attempting focus transfer: input visible={input_field.isVisible()} "
+            f"enabled={input_field.isEnabled()} window_visible={clarification_window.isVisible() if clarification_window else None}"
+        )
+        if clarification_window:
+            clarification_window.setAttribute(
+                Qt.WidgetAttribute.WA_ShowWithoutActivating, False
+            )
+            clarification_window.raise_()
+            clarification_window.activateWindow()
+            app = QApplication.instance()
+            if app:
+                app.setActiveWindow(clarification_window)
+            try:
+                NSApp.activateIgnoringOtherApps_(True)
+            except Exception:
+                pass
+
+        self.raise_()
+        self.activateWindow()
+        input_field.setFocus(Qt.FocusReason.OtherFocusReason)
+        input_field.grabKeyboard()
+        input_field.setCursorPosition(len(input_field.text()))
+        if hasattr(input_field, "ensureCursorVisible"):
+            input_field.ensureCursorVisible()
+        QGuiApplication.processEvents()
+
+        def _verify_focus():
+            focus_widget = QApplication.focusWidget()
+            if focus_widget is input_field:
+                print("[FOCUS] Clarification input successfully focused")
+            else:
+                print(
+                    f"[FOCUS] Clarification input NOT focused. Current focus: {focus_widget}"
+                )
+                if retries > 0:
+                    QTimer.singleShot(
+                        150, lambda: self._focus_clarification_input(retries - 1)
+                    )
+
+        QTimer.singleShot(120, _verify_focus)
 
     def show_starting_soon_window(self):
         """Show starting soon window"""
@@ -1932,6 +2086,7 @@ class Dashboard(QWidget):
 
         # Add the actual AI response
         self.add_clarification_message(response, is_user=False)
+        QTimer.singleShot(0, self._focus_clarification_input)
 
     def on_augmentation_received(self, response):
         """Handle augmentation response from LLM"""
@@ -2503,6 +2658,8 @@ class Dashboard(QWidget):
     def disable_clarification_input(self):
         """Disable the clarification input field and send button after 2 turns"""
         if hasattr(self, "clarification_input"):
+            self.clarification_input.clearFocus()
+            self.clarification_input.releaseKeyboard()
             self.clarification_input.setEnabled(False)
             self.clarification_input.setPlaceholderText("Clarification completed")
             self.clarification_input.setStyleSheet(
@@ -2514,6 +2671,11 @@ class Dashboard(QWidget):
                     padding: 8px 12px;
                     font-size: 13px;
                     color: #999999;
+                }
+                #clarificationInput:focus {
+                    background-color: #666666;
+                    border: none;
+                    padding: 8px 12px;
                 }
             """
             )
@@ -2535,6 +2697,20 @@ class Dashboard(QWidget):
 
         print("[CLARIFICATION] Input and send button disabled after 2 turns")
 
+        # After clarification completes, move keyboard focus to the Start button
+        if hasattr(self, "start_button"):
+            if not getattr(self, "is_capturing", False):
+                self.start_button.setAutoDefault(True)
+                self.start_button.setDefault(True)
+
+                QTimer.singleShot(
+                    120,
+                    lambda: self.start_button.setFocus(Qt.FocusReason.ActiveWindowFocusReason),
+                )
+            else:
+                self.start_button.setAutoDefault(False)
+                self.start_button.setDefault(False)
+
     def enable_clarification_input(self):
         """Enable the clarification input field and send button for new clarification"""
         if hasattr(self, "clarification_input"):
@@ -2549,6 +2725,11 @@ class Dashboard(QWidget):
                     padding: 8px 12px;
                     font-size: 13px;
                     color: white;
+                }
+                #clarificationInput:focus {
+                    background-color: #3A3A3A;
+                    border: 1px solid #FFD60A;
+                    padding: 7px 11px;
                 }
             """
             )
@@ -2572,6 +2753,13 @@ class Dashboard(QWidget):
             )
 
         print("[CLARIFICATION] Input and send button enabled for new clarification")
+
+        # Reset Start button default state while clarification is active
+        if hasattr(self, "start_button"):
+            self.start_button.setAutoDefault(False)
+            self.start_button.setDefault(False)
+
+        QTimer.singleShot(0, self._focus_clarification_input)
 
     def is_clarification_in_progress(self):
         """Check if clarification is currently in progress"""
