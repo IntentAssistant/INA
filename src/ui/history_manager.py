@@ -4,10 +4,10 @@ History management functionality for the dashboard
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath, QLinearGradient
 
 # Import LocalStorage to get proper directory paths
 from ..logging.storage import LocalStorage
@@ -36,6 +36,51 @@ class TimelineWidget(QWidget):
 
         # Set cursor to indicate clickable items
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    @staticmethod
+    def _extract_inverted_values(record):
+        """Return inverted score values (0-1, where 1 = focused) from record samples"""
+        if not record:
+            return []
+
+        samples = record.get("score_samples") or []
+        values = []
+        for sample in samples:
+            if isinstance(sample, dict):
+                score = sample.get("score")
+            else:
+                score = sample
+            try:
+                raw = float(score)
+            except (TypeError, ValueError):
+                continue
+            inverted = max(0.0, min(1.0, 1.0 - raw))
+            values.append(inverted)
+
+        return values
+
+    @staticmethod
+    def _color_for_ratio(ratio: float) -> QColor:
+        """Return QColor for 0.0 (poor) -> red, 0.5 -> yellow, 1.0 (excellent) -> green"""
+        ratio = max(0.0, min(1.0, ratio))
+
+        # Define key colors
+        red = (255, 94, 87)  # #FF5E57
+        yellow = (255, 214, 10)  # #FFD60A
+        green = (40, 167, 69)  # #28A745
+
+        if ratio <= 0.5:
+            t = ratio / 0.5
+            r = int(red[0] + (yellow[0] - red[0]) * t)
+            g = int(red[1] + (yellow[1] - red[1]) * t)
+            b = int(red[2] + (yellow[2] - red[2]) * t)
+        else:
+            t = (ratio - 0.5) / 0.5
+            r = int(yellow[0] + (green[0] - yellow[0]) * t)
+            g = int(yellow[1] + (green[1] - yellow[1]) * t)
+            b = int(yellow[2] + (green[2] - yellow[2]) * t)
+
+        return QColor(r, g, b)
 
     def set_max_visible_items(self, count):
         """Set maximum number of visible items"""
@@ -133,8 +178,42 @@ class TimelineWidget(QWidget):
         end_index = min(start_index + self.max_visible_items, len(self.items))
         visible_items = self.items[start_index:end_index]
 
+        sparkline_width = 70
+        sparkline_height = 18
+        average_width = 46
+        right_margin = 14
+
         for i, item in enumerate(visible_items):
             y_pos = margin_top + (i * item_height)
+            record_index = start_index + i
+            record = (
+                self.intention_records[record_index]
+                if 0 <= record_index < len(self.intention_records)
+                else None
+            )
+            raw_values = record.get("score_samples") if record else []
+            resampled_values = HistoryManager._resample_scores(raw_values)
+            if resampled_values:
+                inverted_values = [max(0.0, min(1.0, 1.0 - val)) for val in resampled_values]
+            else:
+                inverted_values = []
+
+            if len(inverted_values) > 40:
+                inverted_values = inverted_values[-40:]
+
+            average_percent = None
+            if record:
+                average_percent = record.get("focus_inverted_average")
+            if average_percent is None and inverted_values:
+                average_percent = round(sum(inverted_values) / len(inverted_values) * 100)
+
+            if average_percent is None and inverted_values:
+                avg_ratio = sum(inverted_values) / len(inverted_values)
+            elif average_percent is not None:
+                avg_ratio = average_percent / 100.0
+            else:
+                avg_ratio = 0.0
+            path_color = self._color_for_ratio(avg_ratio)
 
             # Draw hover background for hovered item
             if i == self.hovered_item:
@@ -181,17 +260,18 @@ class TimelineWidget(QWidget):
             painter.setPen(QPen(text_color))
 
             # Set smaller font for better fit
-            font = painter.font()
-            font.setPointSize(11)  # Slightly smaller font
-            painter.setFont(font)
+            base_font = painter.font()
+            base_font.setPointSize(11)
+            painter.setFont(base_font)
 
-            # Calculate text area
+            # Calculate text area (leave space for sparkline and average)
             text_x = margin_left + circle_radius * 2 + 8
             text_width = (
-                self.width() - text_x - 20
-            )  # Leave more margin on right for scroll indicator
+                self.width() - text_x - right_margin - sparkline_width - average_width
+            )
+            if text_width < 60:
+                text_width = self.width() - text_x - right_margin
 
-            # Use elided text if too long
             metrics = painter.fontMetrics()
             elided_text = metrics.elidedText(
                 item, Qt.TextElideMode.ElideRight, text_width
@@ -202,6 +282,80 @@ class TimelineWidget(QWidget):
                 y_pos + metrics.height() // 4,
                 elided_text,
             )
+
+            # Draw sparkline if samples exist
+            spark_x = self.width() - right_margin - average_width - sparkline_width
+            spark_top = y_pos - sparkline_height / 2
+            spark_bottom = spark_top + sparkline_height
+            if inverted_values:
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+                # Draw subtle baseline
+                baseline_pen = QPen(QColor("#3C3C3C"), 1)
+                painter.setPen(baseline_pen)
+                painter.drawLine(
+                    int(round(spark_x)),
+                    int(round(spark_bottom)),
+                    int(round(spark_x + sparkline_width)),
+                    int(round(spark_bottom)),
+                )
+
+                # Draw sparkline path
+                # Build segments with per-point color
+                step = sparkline_width / max(1, len(inverted_values) - 1)
+                prev_x = spark_x
+                prev_y = spark_bottom - inverted_values[0] * sparkline_height
+
+                for idx, value in enumerate(inverted_values[1:], 1):
+                    cur_x = spark_x + step * idx
+                    cur_y = spark_bottom - value * sparkline_height
+
+                    # Color based on midpoint value
+                    midpoint = (inverted_values[idx - 1] + value) / 2.0
+                    color = self._color_for_ratio(midpoint)
+                    seg_pen = QPen(color, 2)
+                    seg_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                    painter.setPen(seg_pen)
+                    painter.drawLine(
+                        int(round(prev_x)),
+                        int(round(prev_y)),
+                        int(round(cur_x)),
+                        int(round(cur_y)),
+                    )
+
+                    prev_x, prev_y = cur_x, cur_y
+
+                # If only one point, draw a short horizontal line
+                if len(inverted_values) == 1:
+                    base_color = self._color_for_ratio(inverted_values[0])
+                    base_pen = QPen(base_color, 2)
+                    base_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                    painter.setPen(base_pen)
+                    painter.drawLine(
+                        int(round(prev_x - 1)),
+                        int(round(prev_y)),
+                        int(round(prev_x + 1)),
+                        int(round(prev_y)),
+                    )
+
+                painter.restore()
+
+            # Draw average percentage on the right
+            avg_text = "--" if average_percent is None else f"{int(average_percent):02d}%"
+            avg_font = QFont(base_font)
+            avg_font.setPointSize(10)
+            painter.setFont(avg_font)
+            avg_metrics = painter.fontMetrics()
+            avg_x = self.width() - right_margin - avg_metrics.horizontalAdvance(avg_text)
+            painter.drawText(
+                avg_x,
+                y_pos + avg_metrics.height() // 4,
+                avg_text,
+            )
+
+            # Restore base font for next iteration
+            painter.setFont(base_font)
 
         # Draw scroll indicator if there are more items
         if len(self.items) > self.max_visible_items:
@@ -348,6 +502,14 @@ class HistoryManager:
                     seen_ids.add(record_id)
 
             self.real_intention_history = unique_records
+            for record in self.real_intention_history:
+                if "score_samples" not in record:
+                    record["score_samples"] = []
+                if "focus_inverted_average" not in record:
+                    record["focus_inverted_average"] = self._compute_inverted_average(
+                        record.get("score_samples", [])
+                    )
+
             print(
                 f"[HISTORY] Loaded {len(self.real_intention_history)} intention records"
             )
@@ -404,9 +566,119 @@ class HistoryManager:
             "start_time": datetime.now().isoformat(),
             "end_time": None,
             "duration_minutes": None,
+            "score_samples": [],
+            "focus_inverted_average": None,
         }
         print(f"Started session: {intention} (session_id: {session_id})")
         return self.current_session
+
+    def record_focus_score(self, raw_score, timestamp=None):
+        """Record a raw focus score sample for the current session"""
+        if not self.current_session:
+            return
+
+        try:
+            raw_value = float(raw_score)
+        except (TypeError, ValueError):
+            return
+
+        if timestamp is None:
+            timestamp = datetime.now().isoformat()
+
+        sample = {"timestamp": timestamp, "score": raw_value}
+        samples = self.current_session.setdefault("score_samples", [])
+        samples.append(sample)
+
+    @staticmethod
+    def _resample_scores(samples, max_points=40):
+        """Resample score list to even time buckets (default 1-minute granularity)."""
+        if not samples:
+            return []
+
+        # Convert ISO timestamps to datetime objects
+        converted = []
+        for entry in samples:
+            if isinstance(entry, dict):
+                ts = entry.get("timestamp")
+                score = entry.get("score")
+            else:
+                ts, score = entry
+            if not ts:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts)
+                converted.append((dt, float(score)))
+            except Exception:
+                continue
+
+        if not converted:
+            return []
+
+        converted.sort(key=lambda x: x[0])
+        start, end = converted[0][0], converted[-1][0]
+        duration = (end - start).total_seconds()
+
+        # If duration is tiny or points already small, just return raw values
+        if duration <= 60 or len(converted) <= max_points:
+            return [max(0.0, min(1.0, val)) for _, val in converted]
+
+        # Determine bucket size (seconds) to keep <= max_points
+        bucket_seconds = max(60, duration / max_points)
+
+        buckets = []
+        bucket_start = start
+        bucket_scores = []
+        idx = 0
+        total = len(converted)
+
+        while bucket_start <= end:
+            bucket_end = bucket_start + timedelta(seconds=bucket_seconds)
+            bucket_scores.clear()
+
+            while idx < total and converted[idx][0] < bucket_end:
+                bucket_scores.append(converted[idx][1])
+                idx += 1
+
+            if bucket_scores:
+                buckets.append(sum(bucket_scores) / len(bucket_scores))
+            else:
+                # Carry last known value to avoid gaps
+                last_value = buckets[-1] if buckets else converted[-1][1]
+                buckets.append(last_value)
+
+            bucket_start = bucket_end
+
+            if idx >= total and bucket_start > end:
+                break
+
+        return [max(0.0, min(1.0, val)) for val in buckets]
+
+    @staticmethod
+    def _compute_inverted_average(samples):
+        """Compute inverted average percentage from raw samples"""
+        if not samples:
+            return None
+
+        values = []
+        for sample in samples:
+            if isinstance(sample, dict):
+                score = sample.get("score")
+            else:
+                score = sample
+            try:
+                value = float(score)
+            except (TypeError, ValueError):
+                continue
+            values.append(value)
+
+        if not values:
+            return None
+
+        inverted_values = [max(0.0, min(1.0, 1.0 - val)) for val in values]
+        if not inverted_values:
+            return None
+
+        return round(sum(inverted_values) / len(inverted_values) * 100)
 
     def end_intention_session(self):
         """End the current intention session"""
@@ -419,8 +691,18 @@ class HistoryManager:
             self.current_session["end_time"] = end_time.isoformat()
             self.current_session["duration_minutes"] = duration_minutes
 
+            # Compute inverted average (0 -> 100, 1 -> 0)
+            samples = self.current_session.get("score_samples", [])
+            inverted_average = self._compute_inverted_average(samples)
+            self.current_session["focus_inverted_average"] = inverted_average
+
             # Add to history (most recent first)
-            self.real_intention_history.insert(0, self.current_session.copy())
+            record_copy = self.current_session.copy()
+            # Ensure score samples are copied by value
+            record_copy["score_samples"] = [
+                sample.copy() for sample in self.current_session.get("score_samples", [])
+            ]
+            self.real_intention_history.insert(0, record_copy)
 
             # Keep only last 50 records
             if len(self.real_intention_history) > 50:
