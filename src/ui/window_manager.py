@@ -282,9 +282,10 @@ class WindowManager:
         clarification_input.setPlaceholderText(CLARIFICATION_PLACEHOLDER_TEXT)
         clarification_input.setFixedHeight(INPUT_HEIGHT)
         clarification_input.returnPressed.connect(
-            self.dashboard.send_clarification_message
+            self.dashboard.on_clarification_return_pressed
         )
         clarification_input.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        clarification_input.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
 
         # Send button
         clarification_send_button = QPushButton(SEND_BUTTON_TEXT)
