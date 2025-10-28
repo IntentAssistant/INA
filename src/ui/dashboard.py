@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QDialog,
     QSlider,
+    QApplication,
 )
 from PyQt6.QtCore import (
     Qt,
@@ -29,12 +30,14 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QTextOption,
+    QTextCursor,
     QPainter,
     QPen,
     QBrush,
     QColor,
     QFont,
     QDesktopServices,
+    QGuiApplication,
 )
 
 import sys
@@ -45,7 +48,7 @@ import requests
 import time
 import re
 from datetime import datetime
-from AppKit import NSWindow, NSWindowSharingNone, NSWindowSharingReadOnly
+from AppKit import NSWindow, NSWindowSharingNone, NSWindowSharingReadOnly, NSApp
 from ctypes import c_void_p
 from ..config.constants import (
     WINDOW_MIN_WIDTH,
@@ -68,8 +71,10 @@ SET_BUTTON_TEXT = "Set"
 START_BUTTON_TEXT = "Start"
 STOP_BUTTON_TEXT = "Stop"
 FEEDBACK_MESSAGE_TEXT = "Is this message correct?"
+FEEDBACK_SENDING_TEXT = "Sending feedback..."
+FEEDBACK_DONE_TEXT = "Thanks for letting us know!"
 LOADING_TEXT = "Loading"
-CLARIFICATION_COMPLETE_TEXT = "OK! Click the start button"
+CLARIFICATION_COMPLETE_TEXT = "Ready! Click Start or press Return ↩︎ to begin"
 CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
 INSTRUCTION_START_TEXT = "Click to start activity ↑"
 INSTRUCTION_FINISH_TEXT = "Click 'Done' to finish activity ↑"
@@ -228,10 +233,9 @@ class Dashboard(QWidget):
             # Still try to display empty state
             self.load_and_display_today_history()
 
-        # Show history window on startup
-        QTimer.singleShot(
-            500, self.show_history_window
-        )  # Small delay to ensure UI is ready
+        # Show history window and focus intention input on startup
+        QTimer.singleShot(500, self.show_history_window)
+        QTimer.singleShot(600, self._focus_task_input_initial)
 
         # Make windows secure from screen capture
         self.window_manager.make_windows_secure(self.exclude_from_capture)
@@ -463,6 +467,7 @@ class Dashboard(QWidget):
         )
         self.task_display.setFixedHeight(INPUT_HEIGHT)  # Use constant for height
         self.task_display.mousePressEvent = self.task_display_clicked
+        self.task_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # Start/Stop button
         self.start_button = QPushButton(START_BUTTON_TEXT)  # Start/stop button
@@ -759,6 +764,40 @@ class Dashboard(QWidget):
             # Text changed but not due to IME composition
             pass
 
+    def keyPressEvent(self, event):
+        """Handle global Enter key presses for keyboard-only workflow."""
+        if (
+            event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        ):
+            if self._handle_enter_key_flow():
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def _handle_enter_key_flow(self) -> bool:
+        """Return True if Enter should trigger the Start button."""
+        if getattr(self, "is_capturing", False):
+            return False
+
+        start_button = getattr(self, "start_button", None)
+        if not start_button or not start_button.isEnabled() or not start_button.isVisible():
+            return False
+
+        # Avoid triggering while the user is still typing the intention text
+        if self.input_container.isVisible():
+            return False
+
+        clarification_input = getattr(self, "clarification_input", None)
+        if clarification_input and clarification_input.isEnabled():
+            return False
+
+        if not getattr(self, "_current_task", None):
+            return False
+
+        self.toggle_capture()
+        return True
+
     def set_task(self):
         """Set the current task from the input field"""
         # User config removed - direct local usage only
@@ -773,9 +812,8 @@ class Dashboard(QWidget):
             self.open_api_settings()
             return
 
-        # Force any pending IME composition to complete
+        # Force any pending IME composition to complete by temporarily clearing focus
         self.task_input.clearFocus()
-        self.task_input.setFocus()
 
         # Get the text after ensuring IME completion
         task = self.task_input.toPlainText().strip()
@@ -838,6 +876,7 @@ class Dashboard(QWidget):
 
         # Clear input field only after everything is set
         self.task_input.clear()
+        QTimer.singleShot(400, self._focus_clarification_input)
 
     def show_input_state(self):
         """Show input container (State 1) and hide task container."""
@@ -901,6 +940,45 @@ class Dashboard(QWidget):
         # Force layout update without changing window size
         self.task_container.updateGeometry()
         self.layout().activate()
+
+        self.task_display.clearFocus()
+
+    def _focus_task_input_initial(self, retries: int = 6):
+        """Bring the dashboard to the front and focus the intention input."""
+        task_input = getattr(self, "task_input", None)
+        if not task_input:
+            return
+
+        # If focus already set, nothing more to do
+        if task_input.hasFocus() and QGuiApplication.focusObject() is task_input:
+            return
+
+        try:
+            NSApp.activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
+        app = QApplication.instance()
+        if app:
+            app.setActiveWindow(self)
+
+        self.raise_()
+        self.activateWindow()
+        task_input.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+        task_input.moveCursor(QTextCursor.MoveOperation.End)
+        if hasattr(task_input, "ensureCursorVisible"):
+            task_input.ensureCursorVisible()
+        QGuiApplication.processEvents()
+
+        focused_obj = QGuiApplication.focusObject()
+        if task_input.hasFocus() and focused_obj is task_input:
+            print("[FOCUS] Intention input focused on startup")
+            return
+
+        if retries > 0:
+            QTimer.singleShot(
+                200, lambda: self._focus_task_input_initial(retries - 1)
+            )
 
     def toggle_capture(self):
         """Toggle capturing on/off"""
@@ -997,6 +1075,9 @@ class Dashboard(QWidget):
             self.start_button.setText(STOP_BUTTON_TEXT)
             self.is_capturing = True
             self.capture_started.emit()
+            self.start_button.setAutoDefault(False)
+            self.start_button.setDefault(False)
+            self.start_button.clearFocus()
 
             # Update to "set/started" state with message
             self.message_label.setText(CLICK_MESSAGE)
@@ -1314,9 +1395,102 @@ class Dashboard(QWidget):
         # Start new clarification cycle
         self.llm_client.start_clarification_cycle(initial_task)
 
+        # Move focus to clarification input so the user can answer immediately
+        QTimer.singleShot(0, self._focus_clarification_input)
+        QTimer.singleShot(ANIMATION_SHOW_DURATION + 200, self._focus_clarification_input)
+
     def hide_clarification_window(self):
         """Hide clarification window with animation"""
         self.window_manager.hide_window_with_animation("clarification")
+        clarification_window = getattr(self, "clarification_window", None)
+        if clarification_window:
+            clarification_window.setAttribute(
+                Qt.WidgetAttribute.WA_ShowWithoutActivating, False
+            )
+        clarification_input = getattr(self, "clarification_input", None)
+
+    def _focus_clarification_input(self, retries: int = 5):
+        """Give keyboard focus to the clarification input field."""
+        input_field = getattr(self, "clarification_input", None)
+        if not input_field:
+            print("[FOCUS] Clarification input not available")
+            return
+        if not input_field.isEnabled():
+            print("[FOCUS] Clarification input exists but is disabled")
+            return
+        if not input_field.isVisible():
+            print("[FOCUS] Clarification input is not visible yet")
+            if retries > 0:
+                QTimer.singleShot(
+                    120, lambda: self._focus_clarification_input(retries - 1)
+                )
+            return
+
+        clarification_window = getattr(self, "clarification_window", None)
+        print(
+            f"[FOCUS] Attempting focus transfer: input visible={input_field.isVisible()} "
+            f"enabled={input_field.isEnabled()} window_visible={clarification_window.isVisible() if clarification_window else None}"
+        )
+        if clarification_window:
+            clarification_window.setAttribute(
+                Qt.WidgetAttribute.WA_ShowWithoutActivating, False
+            )
+            clarification_window.raise_()
+            clarification_window.activateWindow()
+            app = QApplication.instance()
+            if app:
+                app.setActiveWindow(clarification_window)
+            try:
+                NSApp.activateIgnoringOtherApps_(True)
+            except Exception:
+                pass
+
+        self.raise_()
+        self.activateWindow()
+        input_field.setFocus(Qt.FocusReason.OtherFocusReason)
+        if hasattr(input_field, "activateWindow"):
+            input_field.activateWindow()
+        try:
+            style = input_field.style()
+            style.unpolish(input_field)
+            style.polish(input_field)
+        except Exception:
+            pass
+        input_field.update()
+        input_field.setCursorPosition(len(input_field.text()))
+        if hasattr(input_field, "ensureCursorVisible"):
+            input_field.ensureCursorVisible()
+        QGuiApplication.processEvents()
+
+        def _verify_focus():
+            focus_widget = QApplication.focusWidget()
+            if focus_widget is input_field:
+                print("[FOCUS] Clarification input successfully focused")
+            else:
+                print(
+                    f"[FOCUS] Clarification input NOT focused. Current focus: {focus_widget}"
+                )
+                if retries > 0:
+                    QTimer.singleShot(
+                        150, lambda: self._focus_clarification_input(retries - 1)
+                    )
+
+        QTimer.singleShot(120, _verify_focus)
+
+    def _focus_start_button_after_clarification(self):
+        """Bring focus to the Start button so Return activates it."""
+        if getattr(self, "is_capturing", False):
+            return
+        start_button = getattr(self, "start_button", None)
+        if not start_button:
+            return
+
+        self.raise_()
+        self.activateWindow()
+        start_button.setAutoDefault(True)
+        start_button.setDefault(True)
+        start_button.setFocus(Qt.FocusReason.OtherFocusReason)
+        QGuiApplication.processEvents()
 
     def show_starting_soon_window(self):
         """Show starting soon window"""
@@ -1426,6 +1600,8 @@ class Dashboard(QWidget):
 
     def llm_response_leave_event(self, event):
         """Hide feedback window when mouse leaves LLM response window"""
+        if getattr(self, "is_processing_feedback", False):
+            return
         # Start timer to hide feedback window after short delay
         if not hasattr(self, "feedback_hide_timer"):
             self.feedback_hide_timer = QTimer()
@@ -1442,6 +1618,8 @@ class Dashboard(QWidget):
 
     def feedback_window_leave_event(self, event):
         """Hide feedback window when mouse leaves with a small delay"""
+        if getattr(self, "is_processing_feedback", False):
+            return
         # Start timer to hide feedback window after short delay
         if not hasattr(self, "feedback_hide_timer"):
             self.feedback_hide_timer = QTimer()
@@ -1517,8 +1695,8 @@ class Dashboard(QWidget):
         else:
             print(f"[FEEDBACK] Warning: No AI judgment stored")
 
-        # Simple visual feedback - change button border
-        self.highlight_feedback_button(button, feedback_type)
+        # Switch UI to loading state
+        self._set_feedback_ui_state("sending", feedback_type=feedback_type, button=button)
 
         # Process feedback immediately (text input feature removed)
         print(f"[FEEDBACK] Processing {feedback_type} feedback immediately")
@@ -1544,34 +1722,62 @@ class Dashboard(QWidget):
             if container:
                 container.setGeometry(0, 0, 400, 90)
 
-    def highlight_feedback_button(self, button, feedback_type):
-        """Highlight clicked feedback button with border color"""
-        # Reset both buttons to default style first with explicit style
-        default_style = """
-            QPushButton {
-                border: 2px solid transparent;
-                border-radius: 12px;
-            }
-        """
-        if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet(default_style)
-        if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet(default_style)
+    def _set_feedback_ui_state(self, state, feedback_type=None, button=None):
+        """Update feedback UI to reflect idle/sending/done states"""
+        feedback_window = self.window_manager.windows.get("feedback")
+        question_label = None
+        if feedback_window:
+            question_label = feedback_window.findChild(QLabel, "questionLabel")
 
-        # Highlight the clicked button
-        if feedback_type == "good":
-            border_color = "#28a745"  # Green
-        else:
-            border_color = "#dc3545"  # Red
+        buttons_container = getattr(self, "feedback_buttons_container", None)
+        spinner = getattr(self, "feedback_spinner", None)
+        spinner_container = getattr(self, "feedback_spinner_container", None)
 
-        button.setStyleSheet(
-            f"""
-            QPushButton {{
-                border: 2px solid {border_color};
-                border-radius: 12px;
-            }}
-        """
-        )
+        if state == "idle":
+            if question_label:
+                question_label.setText(FEEDBACK_MESSAGE_TEXT)
+            if spinner:
+                spinner.stop()
+            if spinner_container:
+                spinner_container.hide()
+            if buttons_container:
+                buttons_container.show()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(True)
+                self.good_feedback_button.setStyleSheet("")
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(True)
+                self.bad_feedback_button.setStyleSheet("")
+            return
+
+        if state == "sending":
+            if question_label:
+                question_label.setText(FEEDBACK_SENDING_TEXT)
+            if buttons_container:
+                buttons_container.hide()
+            if spinner_container:
+                spinner_container.show()
+            if spinner:
+                spinner.start()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(False)
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(False)
+            return
+
+        if state == "done":
+            if question_label:
+                question_label.setText(FEEDBACK_DONE_TEXT)
+            if spinner:
+                spinner.stop()
+            if spinner_container:
+                spinner_container.hide()
+            if buttons_container:
+                buttons_container.hide()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(False)
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(False)
 
     def _process_feedback_submission(self, feedback_type):
         """Process feedback submission immediately (text input removed)"""
@@ -1610,47 +1816,34 @@ class Dashboard(QWidget):
             )
 
         # Also process feedback for reflection (using displayed message data)
-        self.feedback_manager.process_feedback(
-            task_name=self.current_task,
-            llm_response=(
-                feedback_response
-                if feedback_response
-                else """
+        try:
+            self.feedback_manager.process_feedback(
+                task_name=self.current_task,
+                llm_response=(
+                    feedback_response
+                    if feedback_response
+                    else """
 ```json
 {
     "reason": "unknown",
     "output": 0.0
 }
 """
-            ),
-            image_path=self.last_analyzed_image,
-            ai_judgement=ai_judgement_text,
-            feedback_type=feedback_type,
-            image_id=feedback_image_id,  # Use displayed message ID
-            user_text="",  # Text input removed
-        )
-
-        # Reset button styles
-        self.reset_feedback_buttons()
-
-        # Hide feedback window
-        QTimer.singleShot(500, self.hide_feedback_window)
-
-        # Reset processing flag
-        self.is_processing_feedback = False
+                ),
+                image_path=self.last_analyzed_image,
+                ai_judgement=ai_judgement_text,
+                feedback_type=feedback_type,
+                image_id=feedback_image_id,  # Use displayed message ID
+                user_text="",  # Text input removed
+            )
+        except Exception as e:
+            print(f"[FEEDBACK] Error processing feedback: {e}")
+            self._set_feedback_ui_state("idle")
+            self.is_processing_feedback = False
 
     def reset_feedback_buttons(self):
         """Reset feedback button styles to default"""
-        default_style = """
-            QPushButton {
-                border: 2px solid transparent;
-                border-radius: 12px;
-            }
-        """
-        if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet(default_style)
-        if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet(default_style)
+        self._set_feedback_ui_state("idle")
         print("[FEEDBACK] Button styles reset to default")
 
     def moveEvent(self, event):
@@ -1755,6 +1948,8 @@ class Dashboard(QWidget):
 
             # Unlock session termination - user can now stop session
             self.is_processing_feedback = False
+            self._set_feedback_ui_state("done")
+            QTimer.singleShot(900, self.hide_feedback_window)
 
         except Exception as e:
             print(f"[ERROR] Feedback processing error: {e}")
@@ -1924,6 +2119,35 @@ class Dashboard(QWidget):
             # Add user answer to clarification cycle
             self.llm_client.add_user_answer(message)
 
+    def on_clarification_return_pressed(self):
+        """Handle Enter presses in the clarification input."""
+        clarification_input = getattr(self, "clarification_input", None)
+        if not clarification_input:
+            return
+
+        if not clarification_input.isEnabled():
+            if self._handle_enter_key_flow():
+                self._focus_start_button_after_clarification()
+                return
+            start_button = getattr(self, "start_button", None)
+            if start_button and start_button.isEnabled():
+                start_button.click()
+            return
+
+        message = clarification_input.text().strip()
+        if message:
+            self.send_clarification_message()
+            return
+
+        # Empty input – if clarification is complete, allow Enter to start capture
+        if not self.is_clarification_in_progress():
+            self._focus_start_button_after_clarification()
+            if self._handle_enter_key_flow():
+                return
+            start_button = getattr(self, "start_button", None)
+            if start_button and start_button.isEnabled():
+                start_button.click()
+
     def on_clarification_question_received(self, response):
         """Handle clarification question from LLM"""
 
@@ -1932,6 +2156,7 @@ class Dashboard(QWidget):
 
         # Add the actual AI response
         self.add_clarification_message(response, is_user=False)
+        QTimer.singleShot(0, self._focus_clarification_input)
 
     def on_augmentation_received(self, response):
         """Handle augmentation response from LLM"""
@@ -2503,6 +2728,7 @@ class Dashboard(QWidget):
     def disable_clarification_input(self):
         """Disable the clarification input field and send button after 2 turns"""
         if hasattr(self, "clarification_input"):
+            self.clarification_input.clearFocus()
             self.clarification_input.setEnabled(False)
             self.clarification_input.setPlaceholderText("Clarification completed")
             self.clarification_input.setStyleSheet(
@@ -2514,6 +2740,11 @@ class Dashboard(QWidget):
                     padding: 8px 12px;
                     font-size: 13px;
                     color: #999999;
+                }
+                #clarificationInput:focus {
+                    background-color: #666666;
+                    border: none;
+                    padding: 8px 12px;
                 }
             """
             )
@@ -2535,6 +2766,17 @@ class Dashboard(QWidget):
 
         print("[CLARIFICATION] Input and send button disabled after 2 turns")
 
+        # After clarification completes, move keyboard focus to the Start button
+        if hasattr(self, "start_button"):
+            if not getattr(self, "is_capturing", False):
+                self.start_button.setAutoDefault(True)
+                self.start_button.setDefault(True)
+
+                QTimer.singleShot(120, self._focus_start_button_after_clarification)
+            else:
+                self.start_button.setAutoDefault(False)
+                self.start_button.setDefault(False)
+
     def enable_clarification_input(self):
         """Enable the clarification input field and send button for new clarification"""
         if hasattr(self, "clarification_input"):
@@ -2549,6 +2791,11 @@ class Dashboard(QWidget):
                     padding: 8px 12px;
                     font-size: 13px;
                     color: white;
+                }
+                #clarificationInput:focus {
+                    background-color: #3A3A3A;
+                    border: 1px solid #FFD60A;
+                    padding: 7px 11px;
                 }
             """
             )
@@ -2572,6 +2819,13 @@ class Dashboard(QWidget):
             )
 
         print("[CLARIFICATION] Input and send button enabled for new clarification")
+
+        # Reset Start button default state while clarification is active
+        if hasattr(self, "start_button"):
+            self.start_button.setAutoDefault(False)
+            self.start_button.setDefault(False)
+
+        QTimer.singleShot(0, self._focus_clarification_input)
 
     def is_clarification_in_progress(self):
         """Check if clarification is currently in progress"""

@@ -5,6 +5,7 @@ import logging
 import time
 import regex as re
 
+from datetime import datetime
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
@@ -498,6 +499,13 @@ class IntentionalComputingApp(rumps.App):
             is_first_message = self.current_message is None
 
             self.message_update_flag += 1
+
+            # Record raw focus score for current session history
+            try:
+                if self.dashboard and hasattr(self.dashboard, "history_manager"):
+                    self.dashboard.history_manager.record_focus_score(output_raw)
+            except Exception as record_error:
+                print(f"[HISTORY] Failed to record focus score: {record_error}")
 
             # For the first message, set the initial state based on the first output
             if is_first_message:
