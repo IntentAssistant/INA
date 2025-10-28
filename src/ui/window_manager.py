@@ -24,8 +24,9 @@ from PyQt6.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
+    QRectF,
 )
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPainter, QColor
 from AppKit import NSWindowSharingNone, NSWindowSharingReadOnly
 
 # Animation Constants
@@ -42,6 +43,83 @@ CLARIFICATION_TITLE_TEXT = "Clarification"
 CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
 SEND_BUTTON_TEXT = "Send"
 STARTING_SOON_TEXT = "Starting soon..."
+
+
+class LoadingSpinner(QWidget):
+    """Simple animated spinner indicator for feedback processing"""
+
+    def __init__(
+        self,
+        parent=None,
+        line_count: int = 8,
+        line_length: int = 10,
+        line_width: int = 3,
+        inner_radius: int = 6,
+        interval_ms: int = 90,
+    ):
+        super().__init__(parent)
+        self._line_count = max(1, line_count)
+        self._line_length = line_length
+        self._line_width = line_width
+        self._inner_radius = inner_radius
+        self._current_index = 0
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(interval_ms)
+        self._timer.timeout.connect(self._advance_frame)
+
+        size = (inner_radius + line_length) * 2
+        self.setFixedSize(size, size)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.hide()
+
+    def start(self):
+        """Start the spinner animation"""
+        if not self._timer.isActive():
+            self._timer.start()
+        self.show()
+        self.update()
+
+    def stop(self):
+        """Stop the spinner animation"""
+        if self._timer.isActive():
+            self._timer.stop()
+        self.hide()
+
+    def _advance_frame(self):
+        self._current_index = (self._current_index + 1) % self._line_count
+        self.update()
+
+    def paintEvent(self, event):
+        """Draw spinner spokes with fading alpha"""
+        if not self.isVisible():
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        for i in range(self._line_count):
+            painter.save()
+            angle = 360 * i / self._line_count
+            painter.rotate(angle)
+
+            alpha_index = (self._current_index + i) % self._line_count
+            alpha = 80 + int(175 * (self._line_count - alpha_index) / self._line_count)
+            color = QColor(255, 255, 255, max(80, min(255, alpha)))
+            painter.setBrush(color)
+
+            rect = QRectF(
+                -self._line_width / 2,
+                -(self._inner_radius + self._line_length),
+                self._line_width,
+                self._line_length,
+            )
+            painter.drawRoundedRect(
+                rect, self._line_width / 2, self._line_width / 2
+            )
+            painter.restore()
 
 
 class WindowManager:
@@ -524,6 +602,22 @@ class WindowManager:
 
         feedback_layout.addWidget(buttons_container)
 
+        # Loading spinner container (hidden by default, same height as buttons)
+        spinner_container = QWidget()
+        spinner_container.setFixedHeight(50)
+        spinner_layout = QHBoxLayout(spinner_container)
+        spinner_layout.setContentsMargins(0, 0, 0, 0)
+        spinner_layout.setSpacing(0)
+        spinner_layout.addStretch()
+
+        feedback_spinner = LoadingSpinner(spinner_container)
+        feedback_spinner.setObjectName("feedbackSpinner")
+        spinner_layout.addWidget(feedback_spinner)
+
+        spinner_layout.addStretch()
+        spinner_container.hide()
+        feedback_layout.addWidget(spinner_container)
+
         # Text input feature removed - feedback is now Good/Bad only
 
         # Mouse events for showing/hiding feedback window
@@ -612,8 +706,11 @@ class WindowManager:
         self.windows["feedback"] = feedback_window
         self.opacity_effects["feedback"] = opacity_effect
         self.dashboard.feedback_window = feedback_window
+        self.dashboard.feedback_buttons_container = buttons_container
         self.dashboard.good_feedback_button = good_button
         self.dashboard.bad_feedback_button = bad_button
+        self.dashboard.feedback_spinner = feedback_spinner
+        self.dashboard.feedback_spinner_container = spinner_container
         # Text input references removed
 
         # Drag functionality removed - only dashboard should be draggable

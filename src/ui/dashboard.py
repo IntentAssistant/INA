@@ -71,6 +71,8 @@ SET_BUTTON_TEXT = "Set"
 START_BUTTON_TEXT = "Start"
 STOP_BUTTON_TEXT = "Stop"
 FEEDBACK_MESSAGE_TEXT = "Is this message correct?"
+FEEDBACK_SENDING_TEXT = "Sending feedback..."
+FEEDBACK_DONE_TEXT = "Thanks for letting us know!"
 LOADING_TEXT = "Loading"
 CLARIFICATION_COMPLETE_TEXT = "OK! Click the start button"
 CLARIFICATION_PLACEHOLDER_TEXT = "Type your response..."
@@ -1580,6 +1582,8 @@ class Dashboard(QWidget):
 
     def llm_response_leave_event(self, event):
         """Hide feedback window when mouse leaves LLM response window"""
+        if getattr(self, "is_processing_feedback", False):
+            return
         # Start timer to hide feedback window after short delay
         if not hasattr(self, "feedback_hide_timer"):
             self.feedback_hide_timer = QTimer()
@@ -1596,6 +1600,8 @@ class Dashboard(QWidget):
 
     def feedback_window_leave_event(self, event):
         """Hide feedback window when mouse leaves with a small delay"""
+        if getattr(self, "is_processing_feedback", False):
+            return
         # Start timer to hide feedback window after short delay
         if not hasattr(self, "feedback_hide_timer"):
             self.feedback_hide_timer = QTimer()
@@ -1671,8 +1677,8 @@ class Dashboard(QWidget):
         else:
             print(f"[FEEDBACK] Warning: No AI judgment stored")
 
-        # Simple visual feedback - change button border
-        self.highlight_feedback_button(button, feedback_type)
+        # Switch UI to loading state
+        self._set_feedback_ui_state("sending", feedback_type=feedback_type, button=button)
 
         # Process feedback immediately (text input feature removed)
         print(f"[FEEDBACK] Processing {feedback_type} feedback immediately")
@@ -1698,34 +1704,62 @@ class Dashboard(QWidget):
             if container:
                 container.setGeometry(0, 0, 400, 90)
 
-    def highlight_feedback_button(self, button, feedback_type):
-        """Highlight clicked feedback button with border color"""
-        # Reset both buttons to default style first with explicit style
-        default_style = """
-            QPushButton {
-                border: 2px solid transparent;
-                border-radius: 12px;
-            }
-        """
-        if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet(default_style)
-        if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet(default_style)
+    def _set_feedback_ui_state(self, state, feedback_type=None, button=None):
+        """Update feedback UI to reflect idle/sending/done states"""
+        feedback_window = self.window_manager.windows.get("feedback")
+        question_label = None
+        if feedback_window:
+            question_label = feedback_window.findChild(QLabel, "questionLabel")
 
-        # Highlight the clicked button
-        if feedback_type == "good":
-            border_color = "#28a745"  # Green
-        else:
-            border_color = "#dc3545"  # Red
+        buttons_container = getattr(self, "feedback_buttons_container", None)
+        spinner = getattr(self, "feedback_spinner", None)
+        spinner_container = getattr(self, "feedback_spinner_container", None)
 
-        button.setStyleSheet(
-            f"""
-            QPushButton {{
-                border: 2px solid {border_color};
-                border-radius: 12px;
-            }}
-        """
-        )
+        if state == "idle":
+            if question_label:
+                question_label.setText(FEEDBACK_MESSAGE_TEXT)
+            if spinner:
+                spinner.stop()
+            if spinner_container:
+                spinner_container.hide()
+            if buttons_container:
+                buttons_container.show()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(True)
+                self.good_feedback_button.setStyleSheet("")
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(True)
+                self.bad_feedback_button.setStyleSheet("")
+            return
+
+        if state == "sending":
+            if question_label:
+                question_label.setText(FEEDBACK_SENDING_TEXT)
+            if buttons_container:
+                buttons_container.hide()
+            if spinner_container:
+                spinner_container.show()
+            if spinner:
+                spinner.start()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(False)
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(False)
+            return
+
+        if state == "done":
+            if question_label:
+                question_label.setText(FEEDBACK_DONE_TEXT)
+            if spinner:
+                spinner.stop()
+            if spinner_container:
+                spinner_container.hide()
+            if buttons_container:
+                buttons_container.hide()
+            if hasattr(self, "good_feedback_button"):
+                self.good_feedback_button.setEnabled(False)
+            if hasattr(self, "bad_feedback_button"):
+                self.bad_feedback_button.setEnabled(False)
 
     def _process_feedback_submission(self, feedback_type):
         """Process feedback submission immediately (text input removed)"""
@@ -1764,47 +1798,34 @@ class Dashboard(QWidget):
             )
 
         # Also process feedback for reflection (using displayed message data)
-        self.feedback_manager.process_feedback(
-            task_name=self.current_task,
-            llm_response=(
-                feedback_response
-                if feedback_response
-                else """
+        try:
+            self.feedback_manager.process_feedback(
+                task_name=self.current_task,
+                llm_response=(
+                    feedback_response
+                    if feedback_response
+                    else """
 ```json
 {
     "reason": "unknown",
     "output": 0.0
 }
 """
-            ),
-            image_path=self.last_analyzed_image,
-            ai_judgement=ai_judgement_text,
-            feedback_type=feedback_type,
-            image_id=feedback_image_id,  # Use displayed message ID
-            user_text="",  # Text input removed
-        )
-
-        # Reset button styles
-        self.reset_feedback_buttons()
-
-        # Hide feedback window
-        QTimer.singleShot(500, self.hide_feedback_window)
-
-        # Reset processing flag
-        self.is_processing_feedback = False
+                ),
+                image_path=self.last_analyzed_image,
+                ai_judgement=ai_judgement_text,
+                feedback_type=feedback_type,
+                image_id=feedback_image_id,  # Use displayed message ID
+                user_text="",  # Text input removed
+            )
+        except Exception as e:
+            print(f"[FEEDBACK] Error processing feedback: {e}")
+            self._set_feedback_ui_state("idle")
+            self.is_processing_feedback = False
 
     def reset_feedback_buttons(self):
         """Reset feedback button styles to default"""
-        default_style = """
-            QPushButton {
-                border: 2px solid transparent;
-                border-radius: 12px;
-            }
-        """
-        if hasattr(self, "good_feedback_button"):
-            self.good_feedback_button.setStyleSheet(default_style)
-        if hasattr(self, "bad_feedback_button"):
-            self.bad_feedback_button.setStyleSheet(default_style)
+        self._set_feedback_ui_state("idle")
         print("[FEEDBACK] Button styles reset to default")
 
     def moveEvent(self, event):
@@ -1909,6 +1930,8 @@ class Dashboard(QWidget):
 
             # Unlock session termination - user can now stop session
             self.is_processing_feedback = False
+            self._set_feedback_ui_state("done")
+            QTimer.singleShot(900, self.hide_feedback_window)
 
         except Exception as e:
             print(f"[ERROR] Feedback processing error: {e}")
