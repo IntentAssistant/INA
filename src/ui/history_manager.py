@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath, QLinearGradient
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath
 
 # Import LocalStorage to get proper directory paths
 from ..logging.storage import LocalStorage
@@ -36,28 +36,6 @@ class TimelineWidget(QWidget):
 
         # Set cursor to indicate clickable items
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    @staticmethod
-    def _extract_inverted_values(record):
-        """Return inverted score values (0-1, where 1 = focused) from record samples"""
-        if not record:
-            return []
-
-        samples = record.get("score_samples") or []
-        values = []
-        for sample in samples:
-            if isinstance(sample, dict):
-                score = sample.get("score")
-            else:
-                score = sample
-            try:
-                raw = float(score)
-            except (TypeError, ValueError):
-                continue
-            inverted = max(0.0, min(1.0, 1.0 - raw))
-            values.append(inverted)
-
-        return values
 
     @staticmethod
     def _color_for_ratio(ratio: float) -> QColor:
