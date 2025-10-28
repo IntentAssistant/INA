@@ -4,12 +4,18 @@
 # Usage: ./build_dmg.sh
 
 # --- 0. Load code signing configuration (optional) ---
+ENABLE_CODESIGN=false
 if [ -f "codesign_config.sh" ]; then
     echo "Loading code signing configuration..."
-    source codesign_config.sh
-    ENABLE_CODESIGN=true
-else
-    ENABLE_CODESIGN=false
+    if source codesign_config.sh; then
+        if [ "${INA_CODESIGN_READY:-false}" = true ]; then
+            ENABLE_CODESIGN=true
+        else
+            echo "⚠️  Code signing credentials incomplete. Continuing without code signing."
+        fi
+    else
+        echo "⚠️  Failed to load codesign_config.sh. Continuing without code signing."
+    fi
 fi
 
 # --- 1. Determine Python interpreter ---
@@ -258,7 +264,7 @@ if [ -d "dist/Intent Assistant.app" ]; then
         if [ -z "$SUBMISSION_ID" ]; then
             echo ""
             echo "❌ Failed to submit for notarization!"
-            echo "   Check your Apple ID credentials in codesign_config.sh"
+            echo "   Check your Apple ID credentials in codesign_config.local.sh"
             exit 1
         fi
         

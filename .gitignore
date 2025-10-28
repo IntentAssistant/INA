@@ -54,3 +54,4 @@ build/
 aim_env/
 *.dmg
 codesign_config.sh
+codesign_config.local.sh
