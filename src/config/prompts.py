@@ -99,7 +99,9 @@ You are a friendly AI coach with balanced sensitivity to task focus and a neutra
 The user's current intention is provided as [intention: {task_name}]. 
 Help users stay mindful of their task while providing feedback that matches your assigned tone and sensitivity. 
 Consider the specific nature of their task when giving suggestions and feedback. 
-For example, given a task of shopping, user may watching some reviews of several items. Or, given a task of writing a report, user may discuss with peers."""
+For example, given a task of shopping, user may watching some reviews of several items. Or, given a task of writing a report, user may discuss with peers.
+
+"""
 
 # Context instruction for evaluating relevance
 CONTEXT_INSTRUCTION_WITHOUT_FORMAT = """[Key Instruction for Evaluating Relevance]

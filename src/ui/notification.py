@@ -1,17 +1,59 @@
 import os
+import sys
 import subprocess
 import uuid
 import time
 import threading
+from pathlib import Path
 from PyQt6.QtWidgets import QSystemTrayIcon
 from PyQt6.QtCore import QTimer
 
 # --- Desktop Notifier for macOS Sequoia and beyond ---
 import asyncio
+import rumps
 from desktop_notifier import DesktopNotifier, Button
+from desktop_notifier.common import Notification
 
 # Single notifier instance for the whole module
 notifier = DesktopNotifier(app_name="Intention")
+
+
+def _find_assets_dir() -> str | None:
+    """Locate the assets directory whether running from source or py2app bundle."""
+    try:
+        # 1. Development environment: assets next to source files
+        current_dir = Path(__file__).resolve()
+        dev_assets = current_dir.parent.parent / "assets"
+        if dev_assets.exists():
+            return str(dev_assets)
+    except Exception:
+        # __file__ might represent a path inside a zip; ignore and try other fallbacks
+        pass
+
+    # 2. Py2app bundle: assets shipped inside Contents/Resources/assets
+    try:
+        # Foundation.NSBundles handles both frozen and dev modes on macOS
+        from Foundation import NSBundle  # type: ignore
+
+        bundle = NSBundle.mainBundle()
+        resource_path = bundle.resourcePath()
+        if resource_path:
+            bundle_assets = Path(resource_path) / "assets"
+            if bundle_assets.exists():
+                return str(bundle_assets)
+    except Exception:
+        pass
+
+    # 3. Frozen but without Foundation (fallback)
+    try:
+        exe_path = Path(sys.executable).resolve()
+        bundle_assets = exe_path.parent.parent / "Resources" / "assets"
+        if bundle_assets.exists():
+            return str(bundle_assets)
+    except Exception:
+        pass
+
+    return None
 
 
 def play_notification_sound(state: int):
@@ -43,9 +85,13 @@ def play_notification_sound(state: int):
             sound_file = api_manager.get_off_task_sound()
             state_text = "DISTRACTED (off-task)"
 
-        # Get assets directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        assets_dir = os.path.join(os.path.dirname(current_dir), "assets")
+        # Locate assets directory across dev/bundle environments
+        assets_dir = _find_assets_dir()
+
+        if not assets_dir:
+            print("[SOUND] Could not locate assets directory")
+            return
+
         sound_path = os.path.join(assets_dir, sound_file)
 
         if not os.path.exists(sound_path):
@@ -168,6 +214,9 @@ class NotificationManager:
             on_good: Callback function for Good button click
             on_bad: Callback function for Bad button click
         """
+        title_with_emoji = title
+        message_with_emoji = message
+
         try:
             # Check if notifications are enabled
             from ..config.api_config import get_api_config_manager
@@ -320,27 +369,35 @@ class NotificationManager:
 
                 # For notification alerts, make EVERYTHING unique to force separate notifications
                 if title == "Notification":
-                    # Create completely unique app name for each notification
-                    unique_app_name = f"Intention-{unique_id[:8]}"
-                    unique_notifier = DesktopNotifier(app_name=unique_app_name)
-
                     # Keep title clean, only add small unique suffix
                     unique_title = f"{title_with_emoji}"
                     # Keep message clean without debug info
                     unique_message = full_message
                     unique_thread = f"{unique_id}_{timestamp}"
 
-                    await unique_notifier.send(
-                        title=unique_title,
-                        message=unique_message,
-                        buttons=buttons,
-                        thread=unique_thread,
-                    )
+                    success = False
+                    try:
+                        notification_obj = Notification(
+                            title=unique_title,
+                            message=unique_message,
+                            buttons=tuple(buttons),
+                            thread=unique_thread,
+                            identifier=unique_id,
+                        )
+                        await notifier.send_notification(notification_obj)
+                        success = True
+                    except Exception as send_error:
+                        print(f"[NOTIFICATION] DesktopNotifier failed: {send_error}")
+
+                    if not success:
+                        NotificationManager._fallback_rumps_notification(
+                            title_with_emoji, subtitle, unique_message
+                        )
 
                     print("🚀" * 15)
                     print("🚀 DISPATCHING NOTIFICATION...")
                     print("🚀" * 15)
-                    print(f"📤 Notification sent with UNIQUE APP: {unique_app_name}")
+                    print("📤 Notification sent via DesktopNotifier")
                     print(f"📤 Title: {unique_title}")
                     print(f"📤 Message preview: {unique_message[:50]}...")
                     print(f"📤 Thread: {unique_thread}")
@@ -364,6 +421,12 @@ class NotificationManager:
 
         except Exception as e:
             print(f"[ERROR] Notification failed: {e}")
+            fallback_message = message_with_emoji
+            if subtitle:
+                fallback_message = locals().get("full_message", fallback_message)
+            NotificationManager._fallback_rumps_notification(
+                title_with_emoji, subtitle, fallback_message
+            )
 
     @staticmethod
     def _add_emoji_to_title(title, state):
@@ -421,3 +484,17 @@ class NotificationManager:
         rumps.notification(
             "Mode Changed", f"Switched to {mode} Mode", message, sound=False
         )  # Disable default sound
+
+    @staticmethod
+    def _fallback_rumps_notification(title, subtitle, message):
+        """Fallback notification using rumps when DesktopNotifier fails"""
+        try:
+            rumps.notification(
+                title,
+                subtitle or "",
+                message,
+                sound=False,
+            )
+            print("[NOTIFICATION] Fallback rumps notification delivered")
+        except Exception as e:
+            print(f"[NOTIFICATION] Fallback notification failed: {e}")
