@@ -13,7 +13,7 @@ Get going immediately—no developer setup required.
 
 - ⬇️ **Download the latest macOS build:** [`IntentAssistant-v1.0.0.dmg`](https://github.com/IntentAssistant/INA/releases/download/v1.0.0/IntentAssistant-v1.0.0.dmg)
 - 🖥️ **Platform:** macOS 10.15 Catalina or later
-- 📘 **App Usage Guide:** [Google Docs](https://docs.google.com/document/d/1pVUKl5Z7BO9yZe7-pChIgcgEu0JM3DWsI0gXtaqBdew/edit?usp=sharing)
+- 📘 **App Usage Guide:** [Page](https://iing.notion.site/INA-Intent-Assistant-Application-Guide-29b5c593a80880479e92cd106deb868f?source=copy_link)
 
 ---
 <!-- 
